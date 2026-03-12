@@ -1,0 +1,44 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: api-platform-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: api-platform-backend
+          uri: lb://api-platform-backend
+          predicates:
+            - Path=/backend/**
+          filters:
+            - StripPrefix=1
+        - id: api-platform-mock-api
+          uri: lb://api-platform-mock-api
+          predicates:
+            - Path=/mock/**
+          filters:
+            - StripPrefix=1
+  redis:
+    host: localhost
+    port: 6379
+
+dubbo:
+  application:
+    name: api-platform-gateway
+  registry:
+    address: nacos://localhost:8848
+  consumer:
+    check: false
+
+logging:
+  level:
+    com.api.platform: debug
+    org.springframework.cloud.gateway: debug
