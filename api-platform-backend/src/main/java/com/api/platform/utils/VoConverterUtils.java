@@ -42,6 +42,14 @@ public final class VoConverterUtils {
         return apiVO;
     }
 
+    public static ApiVO convertToApiVO(ApiInfo apiInfo, Map<Long, String> typeNameMap, Map<Long, String> usernameMap, java.util.Set<Long> favoritedApiIds) {
+        ApiVO apiVO = convertToApiVO(apiInfo, typeNameMap, usernameMap);
+        if (apiVO != null && favoritedApiIds != null) {
+            apiVO.setIsFavorited(favoritedApiIds.contains(apiInfo.getId()));
+        }
+        return apiVO;
+    }
+
     public static ApiVO convertToApiVO(ApiInfo apiInfo, ApiType apiType, User user) {
         if (apiInfo == null) {
             return null;
@@ -75,6 +83,15 @@ public final class VoConverterUtils {
         }
         return apiInfos.stream()
                 .map(apiInfo -> convertToApiVO(apiInfo, typeNameMap, usernameMap))
+                .collect(Collectors.toList());
+    }
+
+    public static List<ApiVO> convertToApiVOList(List<ApiInfo> apiInfos, Map<Long, String> typeNameMap, Map<Long, String> usernameMap, java.util.Set<Long> favoritedApiIds) {
+        if (apiInfos == null || apiInfos.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return apiInfos.stream()
+                .map(apiInfo -> convertToApiVO(apiInfo, typeNameMap, usernameMap, favoritedApiIds))
                 .collect(Collectors.toList());
     }
 

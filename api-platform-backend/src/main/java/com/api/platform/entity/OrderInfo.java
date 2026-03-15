@@ -40,6 +40,9 @@ public class OrderInfo implements Serializable {
     @TableField("status")
     private String status;
 
+    @TableField("rating")
+    private BigDecimal rating;
+
     @TableField("pay_time")
     private LocalDateTime payTime;
 

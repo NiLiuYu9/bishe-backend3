@@ -39,15 +39,17 @@ public class ApiController {
     private final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     @GetMapping("/list")
-    public Result<PageResultVO<ApiVO>> getPublicApiList(ApiQueryDTO queryDTO) {
+    public Result<PageResultVO<ApiVO>> getPublicApiList(ApiQueryDTO queryDTO, HttpSession session) {
+        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
         queryDTO.setStatus("approved");
-        IPage<ApiVO> apiVOPage = apiInfoService.getApis(queryDTO);
+        IPage<ApiVO> apiVOPage = apiInfoService.getApis(queryDTO, userId);
         return Result.success(PageResultVO.of(apiVOPage.getRecords(), apiVOPage.getTotal()));
     }
 
     @GetMapping("/detail/{id}")
-    public Result<ApiVO> getApiDetail(@PathVariable Long id) {
-        ApiVO apiVO = apiInfoService.getApiDetailById(id);
+    public Result<ApiVO> getApiDetail(@PathVariable Long id, HttpSession session) {
+        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
+        ApiVO apiVO = apiInfoService.getApiDetailById(id, userId);
         if (apiVO == null) {
             return Result.failed("API不存在");
         }

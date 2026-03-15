@@ -57,4 +57,6 @@ public class ApiVO implements Serializable {
 
     private Long failCount;
 
+    private Boolean isFavorited;
+
 }

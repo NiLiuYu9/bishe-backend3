@@ -28,6 +28,8 @@ public class OrderVO implements Serializable {
 
     private String status;
 
+    private BigDecimal rating;
+
     private String createTime;
 
     private String payTime;

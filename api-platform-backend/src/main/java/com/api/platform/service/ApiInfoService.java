@@ -13,7 +13,11 @@ public interface ApiInfoService extends IService<ApiInfo> {
 
     IPage<ApiVO> getApis(ApiQueryDTO queryDTO);
 
+    IPage<ApiVO> getApis(ApiQueryDTO queryDTO, Long currentUserId);
+
     ApiVO getApiDetailById(Long id);
+
+    ApiVO getApiDetailById(Long id, Long currentUserId);
 
     ApiVO createApi(Long userId, ApiCreateDTO createDTO);
 

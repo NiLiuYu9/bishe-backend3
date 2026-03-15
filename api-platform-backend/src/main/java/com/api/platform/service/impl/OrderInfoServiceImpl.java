@@ -3,6 +3,7 @@ package com.api.platform.service.impl;
 import cn.hutool.core.util.StrUtil;
 import com.api.platform.dto.OrderCreateDTO;
 import com.api.platform.dto.OrderQueryDTO;
+import com.api.platform.dto.OrderRatingDTO;
 import com.api.platform.entity.ApiInfo;
 import com.api.platform.entity.OrderInfo;
 import com.api.platform.entity.User;
@@ -101,13 +102,17 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
         }
         String oldStatus = orderInfo.getStatus();
         orderInfo.setStatus(status);
-        if ("paid".equals(status)) {
+        if ("completed".equals(status)) {
+            if (!"paid".equals(oldStatus) && !"completed".equals(oldStatus)) {
+                orderInfo.setPayTime(LocalDateTime.now());
+                userApiQuotaService.addQuota(orderInfo.getBuyerId(), orderInfo.getApiId(), orderInfo.getInvokeCount());
+            }
+            orderInfo.setCompleteTime(LocalDateTime.now());
+        } else if ("paid".equals(status)) {
             orderInfo.setPayTime(LocalDateTime.now());
             if (!"paid".equals(oldStatus)) {
                 userApiQuotaService.addQuota(orderInfo.getBuyerId(), orderInfo.getApiId(), orderInfo.getInvokeCount());
             }
-        } else if ("completed".equals(status)) {
-            orderInfo.setCompleteTime(LocalDateTime.now());
         }
         updateById(orderInfo);
     }
@@ -115,6 +120,31 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
     @Override
     public void deleteOrder(Long orderId) {
         removeById(orderId);
+    }
+
+    @Override
+    public void rateOrder(Long orderId, Long userId, OrderRatingDTO ratingDTO) {
+        OrderInfo orderInfo = getById(orderId);
+        if (orderInfo == null) {
+            throw new RuntimeException("订单不存在");
+        }
+        if (!orderInfo.getBuyerId().equals(userId)) {
+            throw new RuntimeException("无权限评价该订单");
+        }
+        if (!"paid".equals(orderInfo.getStatus()) && !"completed".equals(orderInfo.getStatus())) {
+            throw new RuntimeException("订单未完成，无法评价");
+        }
+        orderInfo.setRating(ratingDTO.getRating());
+        updateById(orderInfo);
+    }
+
+    @Override
+    public BigDecimal getAverageRatingByApiId(Long apiId) {
+        BigDecimal avgRating = baseMapper.getAverageRatingByApiId(apiId);
+        if (avgRating == null) {
+            return BigDecimal.ZERO;
+        }
+        return avgRating.setScale(1, RoundingMode.HALF_UP);
     }
 
     private String generateOrderNo() {

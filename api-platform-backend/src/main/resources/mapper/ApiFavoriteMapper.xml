@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.api.platform.mapper.ApiFavoriteMapper">
+
+    <select id="selectUserFavoriteApis" resultType="com.api.platform.vo.ApiVO">
+        SELECT 
+            a.id,
+            a.name,
+            a.description,
+            t.name AS typeName,
+            a.type_id AS typeId,
+            a.user_id AS userId,
+            u.username,
+            a.method,
+            a.endpoint,
+            a.price,
+            a.price_unit AS priceUnit,
+            a.call_limit AS callLimit,
+            a.status,
+            a.rating,
+            a.invoke_count AS invokeCount,
+            a.success_count AS successCount,
+            a.fail_count AS failCount,
+            a.create_time AS createTime,
+            a.update_time AS updateTime,
+            a.doc_url AS docUrl,
+            f.create_time AS favoriteTime
+        FROM api_favorite f
+        LEFT JOIN api_info a ON f.api_id = a.id
+        LEFT JOIN api_type t ON a.type_id = t.id
+        LEFT JOIN sys_user u ON a.user_id = u.id
+        WHERE f.user_id = #{userId}
+        ORDER BY f.create_time DESC
+    </select>
+
+</mapper>

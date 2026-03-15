@@ -4,6 +4,7 @@ import com.api.platform.common.Result;
 import com.api.platform.constants.SessionConstants;
 import com.api.platform.dto.OrderCreateDTO;
 import com.api.platform.dto.OrderQueryDTO;
+import com.api.platform.dto.OrderRatingDTO;
 import com.api.platform.service.OrderInfoService;
 import com.api.platform.vo.OrderVO;
 import com.api.platform.vo.PageResultVO;
@@ -91,6 +92,20 @@ public class OrderController {
         }
         orderInfoService.deleteOrder(id);
         return Result.success();
+    }
+
+    @PostMapping("/rate/{id}")
+    public Result<Void> rateOrder(@PathVariable Long id, @Validated @RequestBody OrderRatingDTO ratingDTO, HttpSession session) {
+        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
+        if (userId == null) {
+            return Result.failed("请先登录");
+        }
+        try {
+            orderInfoService.rateOrder(id, userId, ratingDTO);
+            return Result.success();
+        } catch (RuntimeException e) {
+            return Result.failed(e.getMessage());
+        }
     }
 
 }

@@ -13,6 +13,7 @@ import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.mapper.ApiTypeMapper;
 import com.api.platform.mapper.UserMapper;
 import com.api.platform.service.ApiInfoService;
+import com.api.platform.service.ApiFavoriteService;
 import com.api.platform.exception.BusinessException;
 import com.api.platform.utils.VoConverterUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -25,8 +26,10 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,8 +41,16 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
     @Autowired
     private UserMapper userMapper;
 
+    @Autowired
+    private ApiFavoriteService apiFavoriteService;
+
     @Override
     public IPage<ApiVO> getApis(ApiQueryDTO queryDTO) {
+        return getApis(queryDTO, null);
+    }
+
+    @Override
+    public IPage<ApiVO> getApis(ApiQueryDTO queryDTO, Long currentUserId) {
         Page<ApiInfo> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
         LambdaQueryWrapper<ApiInfo> queryWrapper = buildQueryWrapper(queryDTO);
         IPage<ApiInfo> apiInfoPage = page(page, queryWrapper);
@@ -53,20 +64,37 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         Map<Long, String> typeNameMap = getTypeNameMap(apiInfoPage.getRecords());
         Map<Long, String> usernameMap = getUsernameMap(apiInfoPage.getRecords());
         
+        Set<Long> favoritedApiIds = new HashSet<>();
+        if (currentUserId != null) {
+            favoritedApiIds = new HashSet<>(apiFavoriteService.getUserFavoriteApiIds(currentUserId));
+        }
+        
+        final Set<Long> finalFavoritedApiIds = favoritedApiIds;
         IPage<ApiVO> apiVOPage = new Page<>(apiInfoPage.getCurrent(), apiInfoPage.getSize(), apiInfoPage.getTotal());
-        apiVOPage.setRecords(VoConverterUtils.convertToApiVOList(apiInfoPage.getRecords(), typeNameMap, usernameMap));
+        apiVOPage.setRecords(VoConverterUtils.convertToApiVOList(apiInfoPage.getRecords(), typeNameMap, usernameMap, finalFavoritedApiIds));
         return apiVOPage;
     }
 
     @Override
     public ApiVO getApiDetailById(Long id) {
+        return getApiDetailById(id, null);
+    }
+
+    @Override
+    public ApiVO getApiDetailById(Long id, Long currentUserId) {
         ApiInfo apiInfo = getById(id);
         if (apiInfo == null) {
             return null;
         }
         ApiType apiType = apiTypeMapper.selectById(apiInfo.getTypeId());
         User user = userMapper.selectById(apiInfo.getUserId());
-        return VoConverterUtils.convertToApiVO(apiInfo, apiType, user);
+        ApiVO apiVO = VoConverterUtils.convertToApiVO(apiInfo, apiType, user);
+        if (currentUserId != null) {
+            apiVO.setIsFavorited(apiFavoriteService.isFavorited(currentUserId, id));
+        } else {
+            apiVO.setIsFavorited(false);
+        }
+        return apiVO;
     }
 
     @Override

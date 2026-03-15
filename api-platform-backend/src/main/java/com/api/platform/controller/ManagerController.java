@@ -21,6 +21,7 @@ import com.api.platform.service.ApiInfoService;
 import com.api.platform.service.ApiTypeService;
 import com.api.platform.service.OrderInfoService;
 import com.api.platform.service.RequirementService;
+import com.api.platform.service.StatisticsSyncService;
 import com.api.platform.service.UserService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.springframework.beans.BeanUtils;
@@ -48,6 +49,9 @@ public class ManagerController {
 
     @Autowired
     private RequirementService requirementService;
+
+    @Autowired
+    private StatisticsSyncService statisticsSyncService;
 
     @GetMapping("/users")
     public Result<PageResultVO<UserVO>> getUserList(UserQueryDTO userQueryDTO) {
@@ -153,6 +157,12 @@ public class ManagerController {
     @PutMapping("/requirements/{id}/updateStatus")
     public Result<Void> updateRequirementStatus(@PathVariable Long id, @RequestBody UpdateStatusDTO updateStatusDTO) {
         requirementService.updateStatus(id, updateStatusDTO.getStatus());
+        return Result.success();
+    }
+
+    @PostMapping("/statistics/sync")
+    public Result<Void> syncStatistics() {
+        statisticsSyncService.syncDailyStatisticsToApiInfo();
         return Result.success();
     }
 

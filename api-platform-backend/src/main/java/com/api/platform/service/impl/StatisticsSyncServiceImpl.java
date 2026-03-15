@@ -1,8 +1,12 @@
 package com.api.platform.service.impl;
 
+import com.api.platform.entity.ApiInfo;
 import com.api.platform.entity.ApiInvokeDaily;
+import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.mapper.ApiInvokeDailyMapper;
+import com.api.platform.mapper.OrderInfoMapper;
 import com.api.platform.service.StatisticsSyncService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.ScanOptions;
@@ -10,8 +14,11 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Service
 public class StatisticsSyncServiceImpl implements StatisticsSyncService {
@@ -24,6 +31,12 @@ public class StatisticsSyncServiceImpl implements StatisticsSyncService {
 
     @Autowired
     private ApiInvokeDailyMapper apiInvokeDailyMapper;
+
+    @Autowired
+    private ApiInfoMapper apiInfoMapper;
+
+    @Autowired
+    private OrderInfoMapper orderInfoMapper;
 
     @Override
     @Scheduled(cron = "0 0 * * * ?")
@@ -91,7 +104,7 @@ public class StatisticsSyncServiceImpl implements StatisticsSyncService {
 
     private void saveOrUpdate(ApiInvokeDaily entity) {
         ApiInvokeDaily existing = apiInvokeDailyMapper.selectOne(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ApiInvokeDaily>()
+                new LambdaQueryWrapper<ApiInvokeDaily>()
                         .eq(ApiInvokeDaily::getApiId, entity.getApiId())
                         .eq(ApiInvokeDaily::getCallerId, entity.getCallerId())
                         .eq(ApiInvokeDaily::getStatDate, entity.getStatDate())
@@ -104,6 +117,52 @@ public class StatisticsSyncServiceImpl implements StatisticsSyncService {
             apiInvokeDailyMapper.updateById(existing);
         } else {
             apiInvokeDailyMapper.insert(entity);
+        }
+    }
+
+    @Override
+    @Scheduled(cron = "0 5 * * * ?")
+    public void syncDailyStatisticsToApiInfo() {
+        List<ApiInfo> apiInfos = apiInfoMapper.selectList(null);
+        for (ApiInfo apiInfo : apiInfos) {
+            updateApiInfoStatistics(apiInfo.getId());
+        }
+    }
+
+    private void updateApiInfoStatistics(Long apiId) {
+        LambdaQueryWrapper<ApiInvokeDaily> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ApiInvokeDaily::getApiId, apiId);
+        List<ApiInvokeDaily> dailyList = apiInvokeDailyMapper.selectList(queryWrapper);
+        
+        long totalInvoke = 0;
+        long totalSuccess = 0;
+        long totalFail = 0;
+        
+        for (ApiInvokeDaily daily : dailyList) {
+            totalInvoke += daily.getTotalCount();
+            totalSuccess += daily.getSuccessCount();
+            totalFail += daily.getFailCount();
+        }
+        
+        ApiInfo apiInfo = apiInfoMapper.selectById(apiId);
+        if (apiInfo != null) {
+            apiInfo.setInvokeCount(totalInvoke);
+            apiInfo.setSuccessCount(totalSuccess);
+            apiInfo.setFailCount(totalFail);
+            apiInfoMapper.updateById(apiInfo);
+        }
+    }
+
+    @Override
+    @Scheduled(cron = "0 10 * * * ?")
+    public void syncApiRating() {
+        List<ApiInfo> apiInfos = apiInfoMapper.selectList(null);
+        for (ApiInfo apiInfo : apiInfos) {
+            BigDecimal avgRating = orderInfoMapper.getAverageRatingByApiId(apiInfo.getId());
+            if (avgRating != null && avgRating.compareTo(BigDecimal.ZERO) > 0) {
+                apiInfo.setRating(avgRating.setScale(1, RoundingMode.HALF_UP));
+                apiInfoMapper.updateById(apiInfo);
+            }
         }
     }
 }
