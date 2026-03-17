@@ -1,5 +1,6 @@
 package com.api.platform.controller;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.api.platform.common.Result;
@@ -11,8 +12,10 @@ import com.api.platform.entity.UserApiQuota;
 import com.api.platform.exception.BusinessException;
 import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.service.AccessKeyService;
+import com.api.platform.service.ApiCacheService;
 import com.api.platform.service.UserApiQuotaService;
 import com.api.platform.vo.ApiInvokeResultVO;
+import com.api.platform.vo.ApiVO;
 import com.api.platform.vo.QuotaCheckVO;
 import com.api.platform.vo.UserQuotaVO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -47,10 +51,14 @@ public class ApiInvokeController {
     @Autowired
     private GatewayConfig gatewayConfig;
 
+    @Autowired
+    private ApiCacheService apiCacheService;
+
     @PostMapping("/call")
     public Result<ApiInvokeResultVO> invokeApi(@RequestBody ApiInvokeDTO invokeDTO) {
         User user = accessKeyService.validateAccessKey(invokeDTO.getAccessKey(), invokeDTO.getSecretKey());
-        ApiInfo apiInfo = apiInfoMapper.selectById(invokeDTO.getApiId());
+        
+        ApiInfo apiInfo = getApiInfoWithCache(invokeDTO.getApiId());
         if (apiInfo == null) {
             throw new BusinessException(404, "API不存在");
         }
@@ -66,7 +74,7 @@ public class ApiInvokeController {
         vo.setRequestParams(invokeDTO.getParams());
 
         try {
-            Object result = callMockApi(apiInfo.getEndpoint(), invokeDTO.getAccessKey(), invokeDTO.getSecretKey(), invokeDTO.getParams());
+            Object result = callTargetApi(apiInfo, invokeDTO.getAccessKey(), invokeDTO.getSecretKey(), invokeDTO.getParams());
             vo.setSuccess(true);
             vo.setMessage("API调用成功");
             vo.setResult(result);
@@ -78,25 +86,59 @@ public class ApiInvokeController {
         return Result.success(vo);
     }
 
-    private Object callMockApi(String endpoint, String accessKey, String secretKey, Map<String, Object> params) {
+    private ApiInfo getApiInfoWithCache(Long apiId) {
+        if (apiCacheService.isNullValueCached(apiId)) {
+            return null;
+        }
+
+        ApiVO cachedVO = apiCacheService.getApiDetailFromCache(apiId);
+        if (cachedVO != null) {
+            return convertToApiInfo(cachedVO);
+        }
+
+        ApiInfo apiInfo = apiInfoMapper.selectById(apiId);
+        if (apiInfo == null) {
+            apiCacheService.cacheNullValue(apiId);
+            return null;
+        }
+
+        ApiVO apiVO = convertToApiVO(apiInfo);
+        apiCacheService.cacheApiDetail(apiId, apiVO);
+        apiCacheService.cachePathMapping(apiInfo.getEndpoint(), apiInfo.getMethod(), apiId);
+
+        return apiInfo;
+    }
+
+    private Object callTargetApi(ApiInfo apiInfo, String accessKey, String secretKey, Map<String, Object> params) {
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Access-Key", accessKey);
         headers.set("X-Secret-Key", secretKey);
 
-        String url = gatewayConfig.getMockApiUrl(endpoint);
+        String targetUrl = apiInfo.getTargetUrl();
+        String endpoint = apiInfo.getEndpoint();
+        
+        String baseUrl;
+        if (StrUtil.isNotBlank(targetUrl)) {
+            if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+                targetUrl = "http://" + targetUrl;
+            }
+            baseUrl = targetUrl + endpoint;
+        } else {
+            baseUrl = gatewayConfig.getGatewayUrl() + endpoint;
+        }
         
         try {
+            StringBuilder urlBuilder = new StringBuilder(baseUrl);
             if (params != null && !params.isEmpty()) {
-                StringBuilder urlBuilder = new StringBuilder(url);
                 urlBuilder.append("?");
                 params.forEach((key, value) -> {
                     urlBuilder.append(key).append("=").append(value).append("&");
                 });
-                url = urlBuilder.substring(0, urlBuilder.length() - 1);
+                baseUrl = urlBuilder.substring(0, urlBuilder.length() - 1);
             }
 
             HttpEntity<String> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+            ResponseEntity<String> response = restTemplate.exchange(baseUrl, HttpMethod.GET, entity, String.class);
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 JSONObject result = JSONUtil.parseObj(response.getBody());
@@ -116,13 +158,13 @@ public class ApiInvokeController {
         User user = accessKeyService.validateAccessKey(accessKey, secretKey);
         List<UserApiQuota> quotas = userApiQuotaService.getUserQuotas(user.getId());
         
-        List<Long> apiIds = quotas.stream()
-                .map(UserApiQuota::getApiId)
-                .distinct()
-                .collect(Collectors.toList());
-        Map<Long, String> apiNameMap = apiIds.isEmpty() ? Collections.emptyMap() : 
-                apiInfoMapper.selectBatchIds(apiIds).stream()
-                        .collect(Collectors.toMap(ApiInfo::getId, ApiInfo::getName));
+        Map<Long, String> apiNameMap = new HashMap<>();
+        for (UserApiQuota quota : quotas) {
+            if (!apiNameMap.containsKey(quota.getApiId())) {
+                String apiName = getApiNameWithCache(quota.getApiId());
+                apiNameMap.put(quota.getApiId(), apiName);
+            }
+        }
         
         List<UserQuotaVO> voList = quotas.stream().map(quota -> {
             UserQuotaVO vo = new UserQuotaVO();
@@ -137,6 +179,29 @@ public class ApiInvokeController {
             return vo;
         }).collect(Collectors.toList());
         return Result.success(voList);
+    }
+
+    private String getApiNameWithCache(Long apiId) {
+        ApiVO cachedVO = apiCacheService.getApiDetailFromCache(apiId);
+        if (cachedVO != null) {
+            return cachedVO.getName();
+        }
+
+        if (apiCacheService.isNullValueCached(apiId)) {
+            return null;
+        }
+
+        ApiInfo apiInfo = apiInfoMapper.selectById(apiId);
+        if (apiInfo == null) {
+            apiCacheService.cacheNullValue(apiId);
+            return null;
+        }
+
+        ApiVO apiVO = convertToApiVO(apiInfo);
+        apiCacheService.cacheApiDetail(apiId, apiVO);
+        apiCacheService.cachePathMapping(apiInfo.getEndpoint(), apiInfo.getMethod(), apiId);
+
+        return apiInfo.getName();
     }
 
     @GetMapping("/quota/check")
@@ -161,6 +226,60 @@ public class ApiInvokeController {
             vo.setRemainingCount(0);
         }
         return Result.success(vo);
+    }
+
+    private ApiVO convertToApiVO(ApiInfo apiInfo) {
+        if (apiInfo == null) {
+            return null;
+        }
+        ApiVO vo = new ApiVO();
+        vo.setId(apiInfo.getId());
+        vo.setName(apiInfo.getName());
+        vo.setDescription(apiInfo.getDescription());
+        vo.setTypeId(apiInfo.getTypeId());
+        vo.setUserId(apiInfo.getUserId());
+        vo.setMethod(apiInfo.getMethod());
+        vo.setEndpoint(apiInfo.getEndpoint());
+        vo.setTargetUrl(apiInfo.getTargetUrl());
+        vo.setPrice(apiInfo.getPrice());
+        vo.setPriceUnit(apiInfo.getPriceUnit());
+        vo.setCallLimit(apiInfo.getCallLimit());
+        vo.setStatus(apiInfo.getStatus());
+        vo.setCreateTime(apiInfo.getCreateTime());
+        vo.setUpdateTime(apiInfo.getUpdateTime());
+        vo.setDocUrl(apiInfo.getDocUrl());
+        vo.setRating(apiInfo.getRating());
+        vo.setInvokeCount(apiInfo.getInvokeCount());
+        vo.setSuccessCount(apiInfo.getSuccessCount());
+        vo.setFailCount(apiInfo.getFailCount());
+        return vo;
+    }
+
+    private ApiInfo convertToApiInfo(ApiVO vo) {
+        if (vo == null) {
+            return null;
+        }
+        ApiInfo apiInfo = new ApiInfo();
+        apiInfo.setId(vo.getId());
+        apiInfo.setName(vo.getName());
+        apiInfo.setDescription(vo.getDescription());
+        apiInfo.setTypeId(vo.getTypeId());
+        apiInfo.setUserId(vo.getUserId());
+        apiInfo.setMethod(vo.getMethod());
+        apiInfo.setEndpoint(vo.getEndpoint());
+        apiInfo.setTargetUrl(vo.getTargetUrl());
+        apiInfo.setPrice(vo.getPrice());
+        apiInfo.setPriceUnit(vo.getPriceUnit());
+        apiInfo.setCallLimit(vo.getCallLimit());
+        apiInfo.setStatus(vo.getStatus());
+        apiInfo.setCreateTime(vo.getCreateTime());
+        apiInfo.setUpdateTime(vo.getUpdateTime());
+        apiInfo.setDocUrl(vo.getDocUrl());
+        apiInfo.setRating(vo.getRating());
+        apiInfo.setInvokeCount(vo.getInvokeCount());
+        apiInfo.setSuccessCount(vo.getSuccessCount());
+        apiInfo.setFailCount(vo.getFailCount());
+        return apiInfo;
     }
 
 }

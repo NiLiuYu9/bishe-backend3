@@ -32,6 +32,9 @@ public class ApiCreateDTO implements Serializable {
     @Size(max = 255, message = "接口地址长度不能超过255个字符")
     private String endpoint;
 
+    @Size(max = 255, message = "目标服务器地址长度不能超过255个字符")
+    private String targetUrl;
+
     @NotNull(message = "请求参数不能为空")
     @Size(min = 1, message = "请求参数至少需要一个")
     @Valid

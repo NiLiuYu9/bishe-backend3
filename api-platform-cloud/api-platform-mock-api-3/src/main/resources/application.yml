@@ -1,0 +1,10 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: api-platform-mock-api-3
+
+logging:
+  level:
+    com.api.platform: debug

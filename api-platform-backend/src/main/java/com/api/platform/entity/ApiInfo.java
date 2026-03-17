@@ -34,6 +34,9 @@ public class ApiInfo implements Serializable {
     @TableField("endpoint")
     private String endpoint;
 
+    @TableField("target_url")
+    private String targetUrl;
+
     @TableField("request_params")
     private String requestParams;
 

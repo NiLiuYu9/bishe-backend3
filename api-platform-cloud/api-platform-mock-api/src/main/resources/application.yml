@@ -4,10 +4,6 @@ server:
 spring:
   application:
     name: api-platform-mock-api
-  cloud:
-    nacos:
-      discovery:
-        server-addr: localhost:8848
 
 logging:
   level:

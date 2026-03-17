@@ -12,26 +12,37 @@ import com.api.platform.dto.RegisterDTO;
 import com.api.platform.dto.UpdatePasswordDTO;
 import com.api.platform.dto.UpdateUserDTO;
 import com.api.platform.dto.UserQueryDTO;
+import com.api.platform.entity.ApiInfo;
 import com.api.platform.entity.User;
 import com.api.platform.vo.LoginVO;
 import com.api.platform.vo.UserVO;
 import com.api.platform.exception.BusinessException;
+import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.mapper.UserMapper;
+import com.api.platform.service.ApiCacheService;
 import com.api.platform.service.UserService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
+import java.util.List;
 
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
     private static final String SALT = "api_platform";
+
+    @Autowired
+    private ApiInfoMapper apiInfoMapper;
+
+    @Autowired
+    private ApiCacheService apiCacheService;
 
     @Override
     public void register(RegisterDTO registerDTO) {
@@ -124,12 +135,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public UserVO updateUserInfo(UpdateUserDTO updateUserDTO, HttpServletRequest request) {
         User user = getCurrentLoginUser(request);
+        String oldUsername = user.getUsername();
+        boolean usernameChanged = false;
+        
         if (updateUserDTO.getUsername() != null && !updateUserDTO.getUsername().equals(user.getUsername())) {
             User existUser = getByUsername(updateUserDTO.getUsername());
             if (existUser != null) {
                 throw new BusinessException(ResultCode.USER_EXISTS);
             }
             user.setUsername(updateUserDTO.getUsername());
+            usernameChanged = true;
         }
         if (updateUserDTO.getEmail() != null) {
             user.setEmail(updateUserDTO.getEmail());
@@ -138,6 +153,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             user.setPhone(updateUserDTO.getPhone());
         }
         updateById(user);
+        
+        if (usernameChanged) {
+            updateApiCacheUsername(user.getId(), user.getUsername());
+        }
+        
         HttpSession session = request.getSession(false);
         if (session != null) {
             session.setAttribute(SessionConstants.USER_ID, user.getId());
@@ -153,6 +173,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         userVO.setStatus(user.getStatus());
         userVO.setCreateTime(user.getCreateTime());
         return userVO;
+    }
+
+    private void updateApiCacheUsername(Long userId, String newUsername) {
+        List<ApiInfo> apiInfoList = apiInfoMapper.selectList(
+                new LambdaQueryWrapper<ApiInfo>()
+                        .eq(ApiInfo::getUserId, userId)
+        );
+        
+        for (ApiInfo apiInfo : apiInfoList) {
+            com.api.platform.vo.ApiVO cachedVO = apiCacheService.getApiDetailFromCache(apiInfo.getId());
+            if (cachedVO != null) {
+                cachedVO.setUsername(newUsername);
+                apiCacheService.cacheApiDetail(apiInfo.getId(), cachedVO);
+            }
+        }
     }
 
     @Override

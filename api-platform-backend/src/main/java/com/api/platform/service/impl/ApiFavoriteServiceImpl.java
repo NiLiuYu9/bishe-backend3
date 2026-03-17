@@ -1,5 +1,8 @@
 package com.api.platform.service.impl;
 
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
+import com.api.platform.dto.ApiParamDTO;
 import com.api.platform.entity.ApiFavorite;
 import com.api.platform.exception.BusinessException;
 import com.api.platform.mapper.ApiFavoriteMapper;
@@ -67,7 +70,15 @@ public class ApiFavoriteServiceImpl extends ServiceImpl<ApiFavoriteMapper, ApiFa
     public IPage<ApiVO> getUserFavorites(Long userId, Integer pageNum, Integer pageSize) {
         Page<ApiVO> page = new Page<>(pageNum, pageSize);
         IPage<ApiVO> result = baseMapper.selectUserFavoriteApis(page, userId);
-        result.getRecords().forEach(api -> api.setIsFavorited(true));
+        result.getRecords().forEach(api -> {
+            api.setIsFavorited(true);
+            if (StrUtil.isNotBlank(api.getRequestParamsJson())) {
+                api.setRequestParams(JSONUtil.toList(api.getRequestParamsJson(), ApiParamDTO.class));
+            }
+            if (StrUtil.isNotBlank(api.getResponseParamsJson())) {
+                api.setResponseParams(JSONUtil.toList(api.getResponseParamsJson(), ApiParamDTO.class));
+            }
+        });
         return result;
     }
 

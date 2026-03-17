@@ -16,6 +16,8 @@
         <module>api-platform-common</module>
         <module>api-platform-gateway</module>
         <module>api-platform-mock-api</module>
+        <module>api-platform-mock-api-2</module>
+        <module>api-platform-mock-api-3</module>
         <module>api-platform-client-sdk</module>
     </modules>
 

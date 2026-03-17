@@ -16,4 +16,6 @@ public class InterfaceInfoVO implements Serializable {
     private String method;
 
     private String status;
+
+    private String targetUrl;
 }

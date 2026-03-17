@@ -12,6 +12,9 @@ public class ApiTestRecord implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    public static final int TYPE_AUTO_CALL = 0;
+    public static final int TYPE_MANUAL_SAVE = 1;
+
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
@@ -41,6 +44,9 @@ public class ApiTestRecord implements Serializable {
 
     @TableField("status_code")
     private Integer statusCode;
+
+    @TableField(value = "type")
+    private Integer type;
 
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     private LocalDateTime createTime;

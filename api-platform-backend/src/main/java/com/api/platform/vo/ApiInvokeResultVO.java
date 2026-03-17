@@ -21,4 +21,8 @@ public class ApiInvokeResultVO {
 
     private Object result;
 
+    private Long responseTime;
+
+    private Integer statusCode;
+
 }

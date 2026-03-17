@@ -2,16 +2,22 @@ package com.api.platform.service.impl;
 
 import com.api.platform.common.ResultCode;
 import com.api.platform.dto.ApiTypeQueryDTO;
+import com.api.platform.entity.ApiInfo;
 import com.api.platform.entity.ApiType;
 import com.api.platform.exception.BusinessException;
+import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.mapper.ApiTypeMapper;
+import com.api.platform.service.ApiCacheService;
 import com.api.platform.service.ApiTypeService;
 import com.api.platform.vo.ApiTypeVO;
+import com.api.platform.vo.ApiVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,6 +25,12 @@ import java.util.stream.Collectors;
 
 @Service
 public class ApiTypeServiceImpl extends ServiceImpl<ApiTypeMapper, ApiType> implements ApiTypeService {
+
+    @Autowired
+    private ApiInfoMapper apiInfoMapper;
+
+    @Autowired
+    private ApiCacheService apiCacheService;
 
     @Override
     public List<ApiType> getAllTypes() {
@@ -59,13 +71,41 @@ public class ApiTypeServiceImpl extends ServiceImpl<ApiTypeMapper, ApiType> impl
 
     @Override
     public void updateType(ApiType apiType) {
-        ApiType existType = getOne(new LambdaQueryWrapper<ApiType>()
+        ApiType existType = baseMapper.selectByIdIgnoreLogicDelete(apiType.getId());
+        if (existType == null) {
+            throw new BusinessException("分类不存在");
+        }
+        
+        ApiType nameConflict = getOne(new LambdaQueryWrapper<ApiType>()
                 .eq(ApiType::getName, apiType.getName())
                 .ne(ApiType::getId, apiType.getId()));
-        if (existType != null) {
+        if (nameConflict != null) {
             throw new BusinessException(ResultCode.API_TYPE_EXISTS);
         }
-        updateById(apiType);
+        
+        boolean nameChanged = !existType.getName().equals(apiType.getName());
+        
+        apiType.setDeleted(existType.getDeleted());
+        baseMapper.updateByIdIgnoreLogicDelete(apiType);
+        
+        if (nameChanged) {
+            updateApiCacheTypeName(apiType.getId(), apiType.getName());
+        }
+    }
+
+    private void updateApiCacheTypeName(Long typeId, String newTypeName) {
+        List<ApiInfo> apiInfoList = apiInfoMapper.selectList(
+                new LambdaQueryWrapper<ApiInfo>()
+                        .eq(ApiInfo::getTypeId, typeId)
+        );
+        
+        for (ApiInfo apiInfo : apiInfoList) {
+            ApiVO cachedVO = apiCacheService.getApiDetailFromCache(apiInfo.getId());
+            if (cachedVO != null) {
+                cachedVO.setTypeName(newTypeName);
+                apiCacheService.cacheApiDetail(apiInfo.getId(), cachedVO);
+            }
+        }
     }
 
     @Override

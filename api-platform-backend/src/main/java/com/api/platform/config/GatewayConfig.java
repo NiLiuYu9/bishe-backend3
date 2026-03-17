@@ -11,13 +11,7 @@ public class GatewayConfig {
 
     private String url;
 
-    private String mockPath = "/mock";
-
-    public String getMockApiUrl(String endpoint) {
-        return url + mockPath + endpoint;
-    }
-
-    public String getApiUrl(String endpoint) {
-        return url + endpoint;
+    public String getGatewayUrl() {
+        return url;
     }
 }

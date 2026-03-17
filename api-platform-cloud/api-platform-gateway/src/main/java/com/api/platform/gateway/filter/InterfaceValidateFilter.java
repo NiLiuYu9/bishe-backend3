@@ -36,17 +36,15 @@ public class InterfaceValidateFilter implements GlobalFilter, Ordered {
 
         String method = request.getMethod().name();
         
-        String apiPath = extractApiPath(path);
-        
-        InterfaceInfoVO interfaceInfo = innerInterfaceInfoService.getInterfaceInfo(apiPath, method);
+        InterfaceInfoVO interfaceInfo = innerInterfaceInfoService.getInterfaceInfo(path, method);
         if (interfaceInfo == null) {
-            log.warn("接口不存在: {} {}", method, apiPath);
+            log.warn("接口不存在: {} {}", method, path);
             exchange.getResponse().setStatusCode(HttpStatus.NOT_FOUND);
             return exchange.getResponse().setComplete();
         }
 
         if (!"approved".equals(interfaceInfo.getStatus())) {
-            log.warn("接口未审核通过或已下架: {}", apiPath);
+            log.warn("接口未审核通过或已下架: {}", path);
             exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
             return exchange.getResponse().setComplete();
         }
@@ -63,18 +61,18 @@ public class InterfaceValidateFilter implements GlobalFilter, Ordered {
 
         exchange.getAttributes().put("interfaceId", interfaceInfo.getId());
 
+        if (StrUtil.isNotBlank(interfaceInfo.getTargetUrl())) {
+            exchange.getAttributes().put("targetUrl", interfaceInfo.getTargetUrl());
+        }
+
         return chain.filter(exchange);
     }
 
-    private String extractApiPath(String path) {
-        return path;
-    }
-
     private boolean isWhitePath(String path) {
-        return path.contains("/auth/login") ||
-               path.contains("/auth/register") ||
-               path.contains("/actuator/health") ||
-               path.contains("/test/");
+        return path.startsWith("/backend/") ||
+               path.startsWith("/auth/") ||
+               path.equals("/actuator/health") ||
+               path.startsWith("/test/");
     }
 
     @Override

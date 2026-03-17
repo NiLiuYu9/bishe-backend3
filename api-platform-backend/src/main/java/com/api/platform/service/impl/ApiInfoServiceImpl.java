@@ -12,6 +12,7 @@ import com.api.platform.vo.ApiVO;
 import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.mapper.ApiTypeMapper;
 import com.api.platform.mapper.UserMapper;
+import com.api.platform.service.ApiCacheService;
 import com.api.platform.service.ApiInfoService;
 import com.api.platform.service.ApiFavoriteService;
 import com.api.platform.exception.BusinessException;
@@ -43,6 +44,9 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
 
     @Autowired
     private ApiFavoriteService apiFavoriteService;
+
+    @Autowired
+    private ApiCacheService apiCacheService;
 
     @Override
     public IPage<ApiVO> getApis(ApiQueryDTO queryDTO) {
@@ -82,8 +86,23 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
 
     @Override
     public ApiVO getApiDetailById(Long id, Long currentUserId) {
+        if (apiCacheService.isNullValueCached(id)) {
+            return null;
+        }
+
+        ApiVO cachedVO = apiCacheService.getApiDetailFromCache(id);
+        if (cachedVO != null) {
+            if (currentUserId != null) {
+                cachedVO.setIsFavorited(apiFavoriteService.isFavorited(currentUserId, id));
+            } else {
+                cachedVO.setIsFavorited(false);
+            }
+            return cachedVO;
+        }
+
         ApiInfo apiInfo = getById(id);
         if (apiInfo == null) {
+            apiCacheService.cacheNullValue(id);
             return null;
         }
         ApiType apiType = apiTypeMapper.selectById(apiInfo.getTypeId());
@@ -94,6 +113,10 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         } else {
             apiVO.setIsFavorited(false);
         }
+
+        apiCacheService.cacheApiDetail(id, apiVO);
+        apiCacheService.cachePathMapping(apiInfo.getEndpoint(), apiInfo.getMethod(), id);
+
         return apiVO;
     }
 
@@ -111,25 +134,45 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         
         ApiType apiType = apiTypeMapper.selectById(apiInfo.getTypeId());
         User user = userMapper.selectById(userId);
-        return VoConverterUtils.convertToApiVO(apiInfo, apiType, user);
+        ApiVO apiVO = VoConverterUtils.convertToApiVO(apiInfo, apiType, user);
+        
+        apiCacheService.cacheApiDetail(apiInfo.getId(), apiVO);
+        apiCacheService.cachePathMapping(apiInfo.getEndpoint(), apiInfo.getMethod(), apiInfo.getId());
+        apiCacheService.clearListCache();
+        
+        return apiVO;
     }
 
     @Override
     public ApiVO updateApi(Long userId, Long apiId, ApiCreateDTO updateDTO) {
-        ApiInfo apiInfo = getById(apiId);
-        if (apiInfo == null) {
+        ApiInfo oldApiInfo = getById(apiId);
+        if (oldApiInfo == null) {
             throw new BusinessException("API不存在");
         }
-        if (!apiInfo.getUserId().equals(userId)) {
+        if (!oldApiInfo.getUserId().equals(userId)) {
             throw new BusinessException("无权限编辑该API");
         }
-        copyCreateDtoToEntity(updateDTO, apiInfo);
-        apiInfo.setStatus("pending");
-        updateById(apiInfo);
         
-        ApiType apiType = apiTypeMapper.selectById(apiInfo.getTypeId());
+        String oldEndpoint = oldApiInfo.getEndpoint();
+        String oldMethod = oldApiInfo.getMethod();
+        
+        copyCreateDtoToEntity(updateDTO, oldApiInfo);
+        oldApiInfo.setStatus("pending");
+        updateById(oldApiInfo);
+        
+        ApiType apiType = apiTypeMapper.selectById(oldApiInfo.getTypeId());
         User user = userMapper.selectById(userId);
-        return VoConverterUtils.convertToApiVO(apiInfo, apiType, user);
+        ApiVO apiVO = VoConverterUtils.convertToApiVO(oldApiInfo, apiType, user);
+        
+        apiCacheService.cacheApiDetail(apiId, apiVO);
+        
+        if (!oldEndpoint.equals(oldApiInfo.getEndpoint()) || !oldMethod.equals(oldApiInfo.getMethod())) {
+            apiCacheService.deletePathMapping(oldEndpoint, oldMethod);
+        }
+        apiCacheService.cachePathMapping(oldApiInfo.getEndpoint(), oldApiInfo.getMethod(), apiId);
+        apiCacheService.clearListCache();
+        
+        return apiVO;
     }
 
     @Override
@@ -150,6 +193,11 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         updateWrapper.eq(ApiInfo::getId, apiId)
                 .set(ApiInfo::getStatus, newStatus);
         update(updateWrapper);
+
+        apiInfo.setStatus(newStatus);
+        ApiVO apiVO = getApiVOFromEntity(apiInfo);
+        apiCacheService.cacheApiDetail(apiId, apiVO);
+        apiCacheService.clearListCache();
     }
 
     @Override
@@ -167,6 +215,38 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         updateWrapper.eq(ApiInfo::getId, apiId)
                 .set(ApiInfo::getStatus, newStatus);
         update(updateWrapper);
+
+        apiInfo.setStatus(newStatus);
+        ApiVO apiVO = getApiVOFromEntity(apiInfo);
+        apiCacheService.cacheApiDetail(apiId, apiVO);
+        apiCacheService.clearListCache();
+    }
+
+    private ApiVO getApiVOFromEntity(ApiInfo apiInfo) {
+        if (apiInfo == null) {
+            return null;
+        }
+        ApiVO vo = new ApiVO();
+        vo.setId(apiInfo.getId());
+        vo.setName(apiInfo.getName());
+        vo.setDescription(apiInfo.getDescription());
+        vo.setTypeId(apiInfo.getTypeId());
+        vo.setUserId(apiInfo.getUserId());
+        vo.setMethod(apiInfo.getMethod());
+        vo.setEndpoint(apiInfo.getEndpoint());
+        vo.setTargetUrl(apiInfo.getTargetUrl());
+        vo.setPrice(apiInfo.getPrice());
+        vo.setPriceUnit(apiInfo.getPriceUnit());
+        vo.setCallLimit(apiInfo.getCallLimit());
+        vo.setStatus(apiInfo.getStatus());
+        vo.setCreateTime(apiInfo.getCreateTime());
+        vo.setUpdateTime(apiInfo.getUpdateTime());
+        vo.setDocUrl(apiInfo.getDocUrl());
+        vo.setRating(apiInfo.getRating());
+        vo.setInvokeCount(apiInfo.getInvokeCount());
+        vo.setSuccessCount(apiInfo.getSuccessCount());
+        vo.setFailCount(apiInfo.getFailCount());
+        return vo;
     }
 
     private LambdaQueryWrapper<ApiInfo> buildQueryWrapper(ApiQueryDTO queryDTO) {
@@ -264,6 +344,7 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         entity.setDescription(dto.getDescription());
         entity.setTypeId(dto.getTypeId());
         entity.setEndpoint(dto.getEndpoint());
+        entity.setTargetUrl(dto.getTargetUrl());
         entity.setMethod(dto.getMethod());
         entity.setPrice(dto.getPrice());
         entity.setRequestParams(dto.getRequestParamsJson());

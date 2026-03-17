@@ -31,9 +31,15 @@ public class ApiVO implements Serializable {
 
     private String endpoint;
 
+    private String targetUrl;
+
     private List<ApiParamDTO> requestParams;
 
     private List<ApiParamDTO> responseParams;
+
+    private String requestParamsJson;
+
+    private String responseParamsJson;
 
     private BigDecimal price;
 

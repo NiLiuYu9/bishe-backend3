@@ -5,6 +5,7 @@ import com.api.platform.entity.ApiInvokeDaily;
 import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.mapper.ApiInvokeDailyMapper;
 import com.api.platform.mapper.OrderInfoMapper;
+import com.api.platform.service.ApiCacheService;
 import com.api.platform.service.StatisticsSyncService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +38,9 @@ public class StatisticsSyncServiceImpl implements StatisticsSyncService {
 
     @Autowired
     private OrderInfoMapper orderInfoMapper;
+
+    @Autowired
+    private ApiCacheService apiCacheService;
 
     @Override
     @Scheduled(cron = "0 0 * * * ?")
@@ -150,6 +154,8 @@ public class StatisticsSyncServiceImpl implements StatisticsSyncService {
             apiInfo.setSuccessCount(totalSuccess);
             apiInfo.setFailCount(totalFail);
             apiInfoMapper.updateById(apiInfo);
+            
+            apiCacheService.updateApiStatistics(apiId, totalInvoke, totalSuccess, totalFail, apiInfo.getRating());
         }
     }
 
@@ -160,8 +166,15 @@ public class StatisticsSyncServiceImpl implements StatisticsSyncService {
         for (ApiInfo apiInfo : apiInfos) {
             BigDecimal avgRating = orderInfoMapper.getAverageRatingByApiId(apiInfo.getId());
             if (avgRating != null && avgRating.compareTo(BigDecimal.ZERO) > 0) {
-                apiInfo.setRating(avgRating.setScale(1, RoundingMode.HALF_UP));
+                BigDecimal rating = avgRating.setScale(1, RoundingMode.HALF_UP);
+                apiInfo.setRating(rating);
                 apiInfoMapper.updateById(apiInfo);
+                
+                apiCacheService.updateApiStatistics(apiInfo.getId(), 
+                        apiInfo.getInvokeCount(), 
+                        apiInfo.getSuccessCount(), 
+                        apiInfo.getFailCount(), 
+                        rating);
             }
         }
     }

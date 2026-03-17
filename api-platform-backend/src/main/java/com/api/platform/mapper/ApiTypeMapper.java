@@ -39,6 +39,16 @@ public interface ApiTypeMapper extends BaseMapper<ApiType> {
     @Update("UPDATE api_type SET deleted = #{deleted} WHERE id = #{id}")
     int updateDeletedById(@Param("id") Long id, @Param("deleted") Integer deleted);
 
+    @InterceptorIgnore(tenantLine = "true", illegalSql = "true", blockAttack = "true")
+    @Update("<script>" +
+            "UPDATE api_type SET " +
+            "name = #{name}, " +
+            "description = #{description}, " +
+            "update_time = NOW() " +
+            "WHERE id = #{id}" +
+            "</script>")
+    int updateByIdIgnoreLogicDelete(ApiType apiType);
+
     @Select("SELECT COUNT(*) FROM api_info WHERE type_id = #{typeId} AND status = 'approved' AND deleted = 0")
     int countApisByTypeId(@Param("typeId") Long typeId);
 }

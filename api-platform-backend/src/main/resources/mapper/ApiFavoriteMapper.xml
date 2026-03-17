@@ -13,6 +13,8 @@
             u.username,
             a.method,
             a.endpoint,
+            a.request_params AS requestParamsJson,
+            a.response_params AS responseParamsJson,
             a.price,
             a.price_unit AS priceUnit,
             a.call_limit AS callLimit,
