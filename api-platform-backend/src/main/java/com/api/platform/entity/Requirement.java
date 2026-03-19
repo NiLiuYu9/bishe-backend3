@@ -50,6 +50,9 @@ public class Requirement implements Serializable {
     @TableField("deleted")
     private Integer deleted;
 
+    @TableField("delivery_url")
+    private String deliveryUrl;
+
     @TableField(exist = false)
     private String username;
 

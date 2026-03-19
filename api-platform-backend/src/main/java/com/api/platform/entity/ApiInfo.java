@@ -52,6 +52,9 @@ public class ApiInfo implements Serializable {
     @TableField("call_limit")
     private Integer callLimit;
 
+    @TableField("whitelist_enabled")
+    private Integer whitelistEnabled;
+
     @TableField("status")
     private String status;
 

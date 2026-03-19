@@ -13,7 +13,9 @@ import com.api.platform.exception.BusinessException;
 import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.service.AccessKeyService;
 import com.api.platform.service.ApiCacheService;
+import com.api.platform.service.ApiWhitelistService;
 import com.api.platform.service.UserApiQuotaService;
+import com.api.platform.utils.VoConverterUtils;
 import com.api.platform.vo.ApiInvokeResultVO;
 import com.api.platform.vo.ApiVO;
 import com.api.platform.vo.QuotaCheckVO;
@@ -54,8 +56,18 @@ public class ApiInvokeController {
     @Autowired
     private ApiCacheService apiCacheService;
 
+    @Autowired
+    private ApiWhitelistService apiWhitelistService;
+
     @PostMapping("/call")
     public Result<ApiInvokeResultVO> invokeApi(@RequestBody ApiInvokeDTO invokeDTO) {
+        if (invokeDTO.getApiId() == null) {
+            throw new BusinessException(400, "API ID不能为空");
+        }
+        if (StrUtil.isBlank(invokeDTO.getAccessKey()) || StrUtil.isBlank(invokeDTO.getSecretKey())) {
+            throw new BusinessException(400, "AccessKey和SecretKey不能为空");
+        }
+        
         User user = accessKeyService.validateAccessKey(invokeDTO.getAccessKey(), invokeDTO.getSecretKey());
         
         ApiInfo apiInfo = getApiInfoWithCache(invokeDTO.getApiId());
@@ -64,6 +76,11 @@ public class ApiInvokeController {
         }
         if (!"approved".equals(apiInfo.getStatus())) {
             throw new BusinessException(403, "API未审核通过或已下架");
+        }
+        if (apiInfo.getWhitelistEnabled() != null && apiInfo.getWhitelistEnabled() == 1) {
+            if (!apiWhitelistService.isInWhitelist(apiInfo.getId(), user.getId())) {
+                throw new BusinessException(403, "您不在该API的白名单中，无法调用");
+            }
         }
         userApiQuotaService.deductQuota(user.getId(), invokeDTO.getApiId());
 
@@ -93,7 +110,7 @@ public class ApiInvokeController {
 
         ApiVO cachedVO = apiCacheService.getApiDetailFromCache(apiId);
         if (cachedVO != null) {
-            return convertToApiInfo(cachedVO);
+            return VoConverterUtils.convertToApiInfo(cachedVO);
         }
 
         ApiInfo apiInfo = apiInfoMapper.selectById(apiId);
@@ -102,7 +119,7 @@ public class ApiInvokeController {
             return null;
         }
 
-        ApiVO apiVO = convertToApiVO(apiInfo);
+        ApiVO apiVO = VoConverterUtils.convertToApiVO(apiInfo);
         apiCacheService.cacheApiDetail(apiId, apiVO);
         apiCacheService.cachePathMapping(apiInfo.getEndpoint(), apiInfo.getMethod(), apiId);
 
@@ -197,7 +214,7 @@ public class ApiInvokeController {
             return null;
         }
 
-        ApiVO apiVO = convertToApiVO(apiInfo);
+        ApiVO apiVO = VoConverterUtils.convertToApiVO(apiInfo);
         apiCacheService.cacheApiDetail(apiId, apiVO);
         apiCacheService.cachePathMapping(apiInfo.getEndpoint(), apiInfo.getMethod(), apiId);
 
@@ -226,60 +243,6 @@ public class ApiInvokeController {
             vo.setRemainingCount(0);
         }
         return Result.success(vo);
-    }
-
-    private ApiVO convertToApiVO(ApiInfo apiInfo) {
-        if (apiInfo == null) {
-            return null;
-        }
-        ApiVO vo = new ApiVO();
-        vo.setId(apiInfo.getId());
-        vo.setName(apiInfo.getName());
-        vo.setDescription(apiInfo.getDescription());
-        vo.setTypeId(apiInfo.getTypeId());
-        vo.setUserId(apiInfo.getUserId());
-        vo.setMethod(apiInfo.getMethod());
-        vo.setEndpoint(apiInfo.getEndpoint());
-        vo.setTargetUrl(apiInfo.getTargetUrl());
-        vo.setPrice(apiInfo.getPrice());
-        vo.setPriceUnit(apiInfo.getPriceUnit());
-        vo.setCallLimit(apiInfo.getCallLimit());
-        vo.setStatus(apiInfo.getStatus());
-        vo.setCreateTime(apiInfo.getCreateTime());
-        vo.setUpdateTime(apiInfo.getUpdateTime());
-        vo.setDocUrl(apiInfo.getDocUrl());
-        vo.setRating(apiInfo.getRating());
-        vo.setInvokeCount(apiInfo.getInvokeCount());
-        vo.setSuccessCount(apiInfo.getSuccessCount());
-        vo.setFailCount(apiInfo.getFailCount());
-        return vo;
-    }
-
-    private ApiInfo convertToApiInfo(ApiVO vo) {
-        if (vo == null) {
-            return null;
-        }
-        ApiInfo apiInfo = new ApiInfo();
-        apiInfo.setId(vo.getId());
-        apiInfo.setName(vo.getName());
-        apiInfo.setDescription(vo.getDescription());
-        apiInfo.setTypeId(vo.getTypeId());
-        apiInfo.setUserId(vo.getUserId());
-        apiInfo.setMethod(vo.getMethod());
-        apiInfo.setEndpoint(vo.getEndpoint());
-        apiInfo.setTargetUrl(vo.getTargetUrl());
-        apiInfo.setPrice(vo.getPrice());
-        apiInfo.setPriceUnit(vo.getPriceUnit());
-        apiInfo.setCallLimit(vo.getCallLimit());
-        apiInfo.setStatus(vo.getStatus());
-        apiInfo.setCreateTime(vo.getCreateTime());
-        apiInfo.setUpdateTime(vo.getUpdateTime());
-        apiInfo.setDocUrl(vo.getDocUrl());
-        apiInfo.setRating(vo.getRating());
-        apiInfo.setInvokeCount(vo.getInvokeCount());
-        apiInfo.setSuccessCount(vo.getSuccessCount());
-        apiInfo.setFailCount(vo.getFailCount());
-        return apiInfo;
     }
 
 }

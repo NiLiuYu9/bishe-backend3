@@ -7,7 +7,6 @@ import cn.hutool.crypto.digest.Digester;
 import cn.hutool.json.JSONUtil;
 import com.api.platform.common.Result;
 import com.api.platform.config.GatewayConfig;
-import com.api.platform.constants.SessionConstants;
 import com.api.platform.dto.TestRecordDTO;
 import com.api.platform.entity.ApiInfo;
 import com.api.platform.entity.ApiTestRecord;
@@ -18,6 +17,8 @@ import com.api.platform.service.AccessKeyService;
 import com.api.platform.service.ApiCacheService;
 import com.api.platform.service.ApiTestRecordService;
 import com.api.platform.service.UserApiQuotaService;
+import com.api.platform.utils.SessionUtils;
+import com.api.platform.utils.VoConverterUtils;
 import com.api.platform.vo.ApiInvokeResultVO;
 import com.api.platform.vo.ApiVO;
 import com.api.platform.vo.TestRecordVO;
@@ -73,10 +74,7 @@ public class TestController {
 
     @PostMapping("/call")
     public Result<ApiInvokeResultVO> testCall(@RequestBody TestCallDTO dto, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            throw new BusinessException(401, "请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
 
         User user = accessKeyService.getById(userId);
         if (user == null) {
@@ -98,7 +96,7 @@ public class TestController {
                 apiCacheService.cacheNullValue(dto.getApiId());
                 throw new BusinessException(404, "API不存在");
             }
-            apiVO = convertToApiVO(apiInfo);
+            apiVO = VoConverterUtils.convertToApiVO(apiInfo);
             apiCacheService.cacheApiDetail(dto.getApiId(), apiVO);
         }
         if (!"approved".equals(apiVO.getStatus())) {
@@ -224,20 +222,14 @@ public class TestController {
 
     @GetMapping("/records/count")
     public Result<Integer> getRecordCount(@RequestParam Long apiId, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            throw new BusinessException(401, "请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         int count = apiTestRecordService.countByUserIdAndApiId(userId, apiId);
         return Result.success(count);
     }
 
     @GetMapping("/daily-calls/remaining")
     public Result<Integer> getRemainingDailyCalls(@RequestParam Long apiId, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            throw new BusinessException(401, "请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         int todayCallCount = apiTestRecordService.countTodayCallsByUserIdAndApiId(userId, apiId);
         int remaining = Math.max(0, MAX_DAILY_CALLS_PER_USER_API - todayCallCount);
         return Result.success(remaining);
@@ -245,10 +237,7 @@ public class TestController {
 
     @PostMapping("/save-record")
     public Result<TestRecordVO> saveRecord(@RequestBody TestRecordDTO dto, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            throw new BusinessException(401, "请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         
         int count = apiTestRecordService.countByUserIdAndApiId(userId, dto.getApiId());
         if (count >= MAX_RECORDS_PER_USER_API) {
@@ -285,10 +274,7 @@ public class TestController {
 
     @GetMapping("/records")
     public Result<List<TestRecordVO>> getRecords(@RequestParam Long apiId, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            throw new BusinessException(401, "请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         List<ApiTestRecord> records = apiTestRecordService.getRecordsByUserIdAndApiId(userId, apiId);
         List<TestRecordVO> voList = records.stream()
             .map(this::convertToVO)
@@ -298,10 +284,7 @@ public class TestController {
 
     @DeleteMapping("/records/{id}")
     public Result<Void> deleteRecord(@PathVariable Long id, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            throw new BusinessException(401, "请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         apiTestRecordService.deleteRecord(userId, id);
         return Result.success();
     }
@@ -320,30 +303,6 @@ public class TestController {
         } catch (Exception e) {
             log.error("解析JSON失败", e);
         }
-        return vo;
-    }
-
-    private ApiVO convertToApiVO(ApiInfo apiInfo) {
-        ApiVO vo = new ApiVO();
-        vo.setId(apiInfo.getId());
-        vo.setName(apiInfo.getName());
-        vo.setDescription(apiInfo.getDescription());
-        vo.setTypeId(apiInfo.getTypeId());
-        vo.setUserId(apiInfo.getUserId());
-        vo.setMethod(apiInfo.getMethod());
-        vo.setEndpoint(apiInfo.getEndpoint());
-        vo.setTargetUrl(apiInfo.getTargetUrl());
-        vo.setPrice(apiInfo.getPrice());
-        vo.setPriceUnit(apiInfo.getPriceUnit());
-        vo.setCallLimit(apiInfo.getCallLimit());
-        vo.setStatus(apiInfo.getStatus());
-        vo.setCreateTime(apiInfo.getCreateTime());
-        vo.setUpdateTime(apiInfo.getUpdateTime());
-        vo.setDocUrl(apiInfo.getDocUrl());
-        vo.setRating(apiInfo.getRating());
-        vo.setInvokeCount(apiInfo.getInvokeCount());
-        vo.setSuccessCount(apiInfo.getSuccessCount());
-        vo.setFailCount(apiInfo.getFailCount());
         return vo;
     }
 }

@@ -134,7 +134,7 @@ public class ApiInvokeServiceImpl implements ApiInvokeService {
         
         List<DailyStatsVO> dailyStatsList = new ArrayList<>();
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-            DailyStatsVO dailyStats = buildDailyStats(date, dailyMap.getOrDefault(date, new ArrayList<>()));
+            DailyStatsVO dailyStats = buildDailyStats(date, dailyMap.getOrDefault(date, new ArrayList<>()), queryDTO.getStatus());
             dailyStatsList.add(dailyStats);
         }
         vo.setDailyStats(dailyStatsList);
@@ -165,7 +165,7 @@ public class ApiInvokeServiceImpl implements ApiInvokeService {
                 .between(ApiInvokeDaily::getStatDate, prevStartDate, prevEndDate);
         List<ApiInvokeDaily> prevRecords = apiInvokeDailyMapper.selectList(prevQueryWrapper);
 
-        return buildApiStatisticsVO(records, prevRecords, startDate, endDate);
+        return buildApiStatisticsVO(records, prevRecords, startDate, endDate, queryDTO.getStatus());
     }
 
     @Override
@@ -184,7 +184,7 @@ public class ApiInvokeServiceImpl implements ApiInvokeService {
         List<ApiInvokeDaily> records = queryUserInvokeRecords(queryDTO, startDate, endDate);
         List<ApiInvokeDaily> prevRecords = queryUserInvokeRecords(queryDTO, prevStartDate, prevEndDate);
 
-        return buildApiStatisticsVO(records, prevRecords, startDate, endDate);
+        return buildApiStatisticsVO(records, prevRecords, startDate, endDate, queryDTO.getStatus());
     }
 
     @Override
@@ -203,7 +203,7 @@ public class ApiInvokeServiceImpl implements ApiInvokeService {
         List<ApiInvokeDaily> records = queryUserApiInvokeRecords(queryDTO, startDate, endDate);
         List<ApiInvokeDaily> prevRecords = queryUserApiInvokeRecords(queryDTO, prevStartDate, prevEndDate);
 
-        return buildApiStatisticsVO(records, prevRecords, startDate, endDate);
+        return buildApiStatisticsVO(records, prevRecords, startDate, endDate, queryDTO.getStatus());
     }
 
     private void calculateDateRange(StatisticsQueryDTO queryDTO) {
@@ -345,13 +345,30 @@ public class ApiInvokeServiceImpl implements ApiInvokeService {
         }
     }
 
-    private DailyStatsVO buildDailyStats(LocalDate date, List<ApiInvokeDaily> dayRecords) {
+    private DailyStatsVO buildDailyStats(LocalDate date, List<ApiInvokeDaily> dayRecords, String status) {
         DailyStatsVO dailyStats = new DailyStatsVO();
         dailyStats.setDate(date.format(DATE_FORMATTER));
         
-        long invokeCount = dayRecords.stream().mapToLong(r -> r.getTotalCount() != null ? r.getTotalCount() : 0).sum();
-        long successCount = dayRecords.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum();
-        long failCount = dayRecords.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum();
+        boolean filterSuccess = "success".equals(status);
+        boolean filterFail = "fail".equals(status);
+        
+        long invokeCount;
+        long successCount;
+        long failCount;
+        
+        if (filterSuccess) {
+            successCount = dayRecords.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum();
+            invokeCount = successCount;
+            failCount = 0;
+        } else if (filterFail) {
+            failCount = dayRecords.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum();
+            invokeCount = failCount;
+            successCount = 0;
+        } else {
+            invokeCount = dayRecords.stream().mapToLong(r -> r.getTotalCount() != null ? r.getTotalCount() : 0).sum();
+            successCount = dayRecords.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum();
+            failCount = dayRecords.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum();
+        }
         
         dailyStats.setInvokeCount(invokeCount);
         dailyStats.setSuccessCount(successCount);
@@ -372,23 +389,44 @@ public class ApiInvokeServiceImpl implements ApiInvokeService {
     }
 
     private ApiStatisticsVO buildApiStatisticsVO(List<ApiInvokeDaily> records, List<ApiInvokeDaily> prevRecords, 
-                                                  LocalDate startDate, LocalDate endDate) {
+                                                  LocalDate startDate, LocalDate endDate, String status) {
         ApiStatisticsVO vo = new ApiStatisticsVO();
         
-        vo.setInvokeCount(records.stream().mapToLong(r -> r.getTotalCount() != null ? r.getTotalCount() : 0).sum());
-        vo.setSuccessCount(records.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum());
-        vo.setFailCount(records.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum());
+        boolean filterSuccess = "success".equals(status);
+        boolean filterFail = "fail".equals(status);
+        
+        if (filterSuccess) {
+            vo.setInvokeCount(records.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum());
+            vo.setSuccessCount(records.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum());
+            vo.setFailCount(0L);
+            
+            vo.setPrevInvokeCount(prevRecords.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum());
+            vo.setPrevSuccessCount(prevRecords.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum());
+            vo.setPrevFailCount(0L);
+        } else if (filterFail) {
+            vo.setInvokeCount(records.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum());
+            vo.setSuccessCount(0L);
+            vo.setFailCount(records.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum());
+            
+            vo.setPrevInvokeCount(prevRecords.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum());
+            vo.setPrevSuccessCount(0L);
+            vo.setPrevFailCount(prevRecords.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum());
+        } else {
+            vo.setInvokeCount(records.stream().mapToLong(r -> r.getTotalCount() != null ? r.getTotalCount() : 0).sum());
+            vo.setSuccessCount(records.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum());
+            vo.setFailCount(records.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum());
 
-        vo.setPrevInvokeCount(prevRecords.stream().mapToLong(r -> r.getTotalCount() != null ? r.getTotalCount() : 0).sum());
-        vo.setPrevSuccessCount(prevRecords.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum());
-        vo.setPrevFailCount(prevRecords.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum());
+            vo.setPrevInvokeCount(prevRecords.stream().mapToLong(r -> r.getTotalCount() != null ? r.getTotalCount() : 0).sum());
+            vo.setPrevSuccessCount(prevRecords.stream().mapToLong(r -> r.getSuccessCount() != null ? r.getSuccessCount() : 0).sum());
+            vo.setPrevFailCount(prevRecords.stream().mapToLong(r -> r.getFailCount() != null ? r.getFailCount() : 0).sum());
+        }
 
         Map<LocalDate, List<ApiInvokeDaily>> dailyMap = records.stream()
                 .collect(Collectors.groupingBy(ApiInvokeDaily::getStatDate));
         
         List<DailyStatsVO> dailyStatsList = new ArrayList<>();
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-            DailyStatsVO dailyStats = buildDailyStats(date, dailyMap.getOrDefault(date, new ArrayList<>()));
+            DailyStatsVO dailyStats = buildDailyStats(date, dailyMap.getOrDefault(date, new ArrayList<>()), status);
             dailyStatsList.add(dailyStats);
         }
         vo.setDailyStats(dailyStatsList);

@@ -1,9 +1,9 @@
 package com.api.platform.controller;
 
 import com.api.platform.common.Result;
-import com.api.platform.constants.SessionConstants;
 import com.api.platform.dto.QuotaQueryDTO;
 import com.api.platform.service.UserApiQuotaService;
+import com.api.platform.utils.SessionUtils;
 import com.api.platform.vo.PageResultVO;
 import com.api.platform.vo.UserQuotaVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -25,10 +25,7 @@ public class QuotaController {
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) String apiName,
             HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.unauthorized();
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         QuotaQueryDTO queryDTO = new QuotaQueryDTO();
         queryDTO.setPageNum(pageNum);
         queryDTO.setPageSize(pageSize);

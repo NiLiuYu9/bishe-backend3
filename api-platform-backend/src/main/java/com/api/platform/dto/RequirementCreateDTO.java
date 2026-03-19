@@ -7,7 +7,7 @@ import javax.validation.Valid;
 import javax.validation.constraints.*;
 import java.io.Serializable;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 @Data
@@ -33,7 +33,7 @@ public class RequirementCreateDTO implements Serializable {
     private BigDecimal budget;
 
     @NotNull(message = "截止日期不能为空")
-    private LocalDateTime deadline;
+    private LocalDate deadline;
 
     public String getRequestParamsJson() {
         if (requestParams == null) {

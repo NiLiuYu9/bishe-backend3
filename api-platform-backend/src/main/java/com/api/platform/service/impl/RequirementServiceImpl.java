@@ -6,6 +6,7 @@ import com.api.platform.dto.ApiParamDTO;
 import com.api.platform.dto.RequirementApplyDTO;
 import com.api.platform.dto.RequirementApplicantSelectDTO;
 import com.api.platform.dto.RequirementCreateDTO;
+import com.api.platform.dto.RequirementDeliverDTO;
 import com.api.platform.dto.RequirementQueryDTO;
 import com.api.platform.entity.Requirement;
 import com.api.platform.entity.RequirementApplicant;
@@ -46,6 +47,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
     public IPage<RequirementVO> pageList(RequirementQueryDTO queryDTO) {
         Page<Requirement> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
         LambdaQueryWrapper<Requirement> queryWrapper = buildQueryWrapper(queryDTO);
+        queryWrapper.notIn(Requirement::getStatus, "completed", "after_sale", "delivered");
         IPage<Requirement> requirementPage = page(page, queryWrapper);
         return convertToVOPage(requirementPage);
     }
@@ -56,31 +58,32 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         if (requirement == null) {
             return null;
         }
+        User publisher = userMapper.selectById(requirement.getUserId());
         List<RequirementApplicant> applicants = applicantMapper.selectList(
                 new LambdaQueryWrapper<RequirementApplicant>()
                         .eq(RequirementApplicant::getRequirementId, id)
                         .orderByDesc(RequirementApplicant::getApplyTime)
         );
-        Map<Long, String> usernameMap = Collections.emptyMap();
+        Map<Long, String> usernameMap = new java.util.HashMap<>();
+        usernameMap.put(requirement.getUserId(), publisher != null ? publisher.getUsername() : "");
         if (!applicants.isEmpty()) {
             List<Long> userIds = applicants.stream()
                     .map(RequirementApplicant::getUserId)
                     .distinct()
                     .collect(Collectors.toList());
             List<User> users = userMapper.selectBatchIds(userIds);
-            usernameMap = users.stream()
-                    .collect(Collectors.toMap(User::getId, User::getUsername));
+            users.forEach(user -> usernameMap.put(user.getId(), user.getUsername()));
         }
-        Map<Long, String> finalUsernameMap = usernameMap;
         List<ApplicantVO> applicantVOs = applicants.stream()
                 .map(applicant -> {
                     ApplicantVO vo = new ApplicantVO();
                     BeanUtils.copyProperties(applicant, vo);
-                    vo.setUsername(finalUsernameMap.get(applicant.getUserId()));
+                    vo.setUsername(usernameMap.get(applicant.getUserId()));
                     return vo;
                 })
                 .collect(Collectors.toList());
         RequirementVO vo = convertToVO(requirement);
+        vo.setUsername(usernameMap.get(requirement.getUserId()));
         vo.setApplicants(applicantVOs);
         ApplicantVO selectedApplicant = applicantVOs.stream()
                 .filter(a -> "accepted".equals(a.getStatus()))
@@ -93,11 +96,14 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RequirementVO create(Long userId, RequirementCreateDTO createDTO) {
-        if (createDTO.getDeadline() != null && createDTO.getDeadline().isBefore(LocalDateTime.now())) {
+        if (createDTO.getDeadline() != null && createDTO.getDeadline().isBefore(java.time.LocalDate.now())) {
             throw new BusinessException("截止日期不能早于当前时间");
         }
         Requirement requirement = new Requirement();
         BeanUtils.copyProperties(createDTO, requirement);
+        if (createDTO.getDeadline() != null) {
+            requirement.setDeadline(createDTO.getDeadline().atStartOfDay());
+        }
         requirement.setUserId(userId);
         requirement.setRequestParams(createDTO.getRequestParamsJson());
         requirement.setResponseParams(createDTO.getResponseParamsJson());
@@ -119,10 +125,13 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         if (!"open".equals(requirement.getStatus())) {
             throw new BusinessException("只有开放中的需求才能编辑");
         }
-        if (updateDTO.getDeadline() != null && updateDTO.getDeadline().isBefore(LocalDateTime.now())) {
+        if (updateDTO.getDeadline() != null && updateDTO.getDeadline().isBefore(java.time.LocalDate.now())) {
             throw new BusinessException("截止日期不能早于当前时间");
         }
         BeanUtils.copyProperties(updateDTO, requirement);
+        if (updateDTO.getDeadline() != null) {
+            requirement.setDeadline(updateDTO.getDeadline().atStartOfDay());
+        }
         requirement.setRequestParams(updateDTO.getRequestParamsJson());
         requirement.setResponseParams(updateDTO.getResponseParamsJson());
         updateById(requirement);
@@ -271,6 +280,47 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deliver(Long userId, Long requirementId, RequirementDeliverDTO deliverDTO) {
+        Requirement requirement = getById(requirementId);
+        if (requirement == null) {
+            throw new BusinessException("需求不存在");
+        }
+        if (!"in_progress".equals(requirement.getStatus())) {
+            throw new BusinessException("只有进行中的需求才能交付");
+        }
+        RequirementApplicant acceptedApplicant = applicantMapper.selectOne(new LambdaQueryWrapper<RequirementApplicant>()
+                .eq(RequirementApplicant::getRequirementId, requirementId)
+                .eq(RequirementApplicant::getStatus, "accepted"));
+        if (acceptedApplicant == null) {
+            throw new BusinessException("该需求尚未选择接单者");
+        }
+        if (!acceptedApplicant.getUserId().equals(userId)) {
+            throw new BusinessException("无权限交付该需求");
+        }
+        requirement.setDeliveryUrl(deliverDTO.getDeliveryUrl());
+        requirement.setStatus("delivered");
+        updateById(requirement);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmDelivery(Long userId, Long requirementId) {
+        Requirement requirement = getById(requirementId);
+        if (requirement == null) {
+            throw new BusinessException("需求不存在");
+        }
+        if (!requirement.getUserId().equals(userId)) {
+            throw new BusinessException("无权限确认交付");
+        }
+        if (!"delivered".equals(requirement.getStatus())) {
+            throw new BusinessException("只有已交付的需求才能确认");
+        }
+        requirement.setStatus("completed");
+        updateById(requirement);
+    }
+
+    @Override
     public IPage<RequirementVO> getMyPublished(Long userId, RequirementQueryDTO queryDTO) {
         Page<Requirement> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
         LambdaQueryWrapper<Requirement> queryWrapper = buildQueryWrapper(queryDTO);
@@ -301,12 +351,24 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         List<Requirement> requirements = listByIds(requirementIds);
         Map<Long, Requirement> requirementMap = requirements.stream()
                 .collect(Collectors.toMap(Requirement::getId, r -> r));
+        List<Long> publisherIds = requirements.stream()
+                .map(Requirement::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, String> usernameMap = Collections.emptyMap();
+        if (!publisherIds.isEmpty()) {
+            List<User> users = userMapper.selectBatchIds(publisherIds);
+            usernameMap = users.stream()
+                    .collect(Collectors.toMap(User::getId, User::getUsername));
+        }
+        Map<Long, String> finalUsernameMap = usernameMap;
         IPage<RequirementVO> voPage = new Page<>(applicantIPage.getCurrent(), applicantIPage.getSize(), applicantIPage.getTotal());
         List<RequirementVO> voList = applicantIPage.getRecords().stream()
                 .map(applicant -> {
                     Requirement requirement = requirementMap.get(applicant.getRequirementId());
                     if (requirement == null) return null;
                     RequirementVO vo = convertToVO(requirement);
+                    vo.setUsername(finalUsernameMap.get(requirement.getUserId()));
                     vo.setMyApplyStatus(applicant.getStatus());
                     return vo;
                 })
@@ -382,8 +444,6 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         if (StrUtil.isNotBlank(requirement.getResponseParams())) {
             vo.setResponseParams(JSONUtil.toList(requirement.getResponseParams(), ApiParamDTO.class));
         }
-        User user = userMapper.selectById(requirement.getUserId());
-        vo.setUsername(user != null ? user.getUsername() : "");
         return vo;
     }
 

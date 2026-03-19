@@ -11,11 +11,27 @@
  Target Server Version : 80042 (8.0.42)
  File Encoding         : 65001
 
- Date: 17/03/2026 17:20:19
+ Date: 19/03/2026 23:53:13
 */
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
+
+-- ----------------------------
+-- Table structure for after_sale_message
+-- ----------------------------
+DROP TABLE IF EXISTS `after_sale_message`;
+CREATE TABLE `after_sale_message`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `after_sale_id` bigint NOT NULL COMMENT '售后ID',
+  `sender_id` bigint NOT NULL COMMENT '发送者ID',
+  `sender_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '发送者类型 applicant/developer/admin',
+  `content` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '消息内容',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_after_sale_id`(`after_sale_id` ASC) USING BTREE,
+  INDEX `idx_create_time`(`create_time` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '售后对话记录表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Table structure for api_favorite
@@ -30,7 +46,7 @@ CREATE TABLE `api_favorite`  (
   UNIQUE INDEX `uk_user_api`(`user_id` ASC, `api_id` ASC) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_api_id`(`api_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 8 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'API收藏表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'API收藏表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Table structure for api_info
@@ -50,6 +66,7 @@ CREATE TABLE `api_info`  (
   `price` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT '价格',
   `price_unit` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'per_call' COMMENT '价格单位 per_call/per_month/per_year',
   `call_limit` int NOT NULL DEFAULT 0 COMMENT '调用限制 0表示无限制',
+  `whitelist_enabled` tinyint NULL DEFAULT 0 COMMENT '是否启用白名单 0-否 1-是',
   `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'pending' COMMENT '状态 pending/approved/rejected/offline',
   `doc_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '文档地址',
   `rating` decimal(3, 2) NULL DEFAULT 0.00 COMMENT '评分 0-5',
@@ -63,7 +80,7 @@ CREATE TABLE `api_info`  (
   INDEX `idx_type_id`(`type_id` ASC) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 22 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'API信息表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 24 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'API信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for api_invoke_daily
@@ -91,6 +108,29 @@ CREATE TABLE `api_invoke_daily`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 840 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'API调用每日统计表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
+-- Table structure for api_review
+-- ----------------------------
+DROP TABLE IF EXISTS `api_review`;
+CREATE TABLE `api_review`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `order_id` bigint NOT NULL COMMENT '订单ID',
+  `api_id` bigint NOT NULL COMMENT 'API ID',
+  `user_id` bigint NOT NULL COMMENT '评价用户ID',
+  `rating` decimal(2, 1) NOT NULL COMMENT '评分(0.5-5.0)',
+  `content` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '评价内容',
+  `reply` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '开发者回复',
+  `reply_time` datetime NULL DEFAULT NULL COMMENT '回复时间',
+  `parent_id` bigint NULL DEFAULT NULL COMMENT '父评论ID（用于回复关系）',
+  `reply_type` tinyint NULL DEFAULT 0 COMMENT '回复类型 0-原评论 1-上架者回复 2-评论者回复',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_order_id`(`order_id` ASC) USING BTREE,
+  INDEX `idx_api_id`(`api_id` ASC) USING BTREE,
+  INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
+  INDEX `idx_parent_id`(`parent_id` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'API评价表' ROW_FORMAT = DYNAMIC;
+
+-- ----------------------------
 -- Table structure for api_test_record
 -- ----------------------------
 DROP TABLE IF EXISTS `api_test_record`;
@@ -112,7 +152,7 @@ CREATE TABLE `api_test_record`  (
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_create_time`(`create_time` ASC) USING BTREE,
   INDEX `idx_user_api_type`(`user_id` ASC, `api_id` ASC, `type` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 11 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'API测试记录表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 29 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'API测试记录表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for api_type
@@ -128,6 +168,21 @@ CREATE TABLE `api_type`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_name`(`name` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 16 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'API类型表' ROW_FORMAT = DYNAMIC;
+
+-- ----------------------------
+-- Table structure for api_whitelist
+-- ----------------------------
+DROP TABLE IF EXISTS `api_whitelist`;
+CREATE TABLE `api_whitelist`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `api_id` bigint NOT NULL COMMENT 'API ID',
+  `user_id` bigint NOT NULL COMMENT '白名单用户ID',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '添加时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_api_user`(`api_id` ASC, `user_id` ASC) USING BTREE,
+  INDEX `idx_api_id`(`api_id` ASC) USING BTREE,
+  INDEX `idx_user_id`(`user_id` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'API白名单表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for order_info
@@ -155,7 +210,7 @@ CREATE TABLE `order_info`  (
   INDEX `idx_buyer_id`(`buyer_id` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE,
   INDEX `idx_create_time`(`create_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 49 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 50 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for requirement
@@ -174,8 +229,36 @@ CREATE TABLE `requirement`  (
   `create_time` datetime NULL DEFAULT NULL,
   `update_time` datetime NULL DEFAULT NULL,
   `deleted` tinyint NULL DEFAULT 0,
+  `delivery_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '交付网址',
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci ROW_FORMAT = DYNAMIC;
+
+-- ----------------------------
+-- Table structure for requirement_after_sale
+-- ----------------------------
+DROP TABLE IF EXISTS `requirement_after_sale`;
+CREATE TABLE `requirement_after_sale`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `requirement_id` bigint NOT NULL COMMENT '需求ID',
+  `applicant_id` bigint NOT NULL COMMENT '申请人ID（需求发布方）',
+  `developer_id` bigint NOT NULL COMMENT '开发者ID',
+  `reason` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '售后原因',
+  `unimplemented_features` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '未实现的功能点',
+  `developer_response` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '开发者回应',
+  `developer_response_time` datetime NULL DEFAULT NULL COMMENT '开发者回应时间',
+  `admin_id` bigint NULL DEFAULT NULL COMMENT '裁定管理员ID',
+  `admin_decision` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '管理员裁定说明',
+  `admin_decision_time` datetime NULL DEFAULT NULL COMMENT '裁定时间',
+  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'pending' COMMENT '状态 pending/resolved/rejected',
+  `result` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '裁定结果 completed/refunded（仅status=resolved时有效）',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_requirement_id`(`requirement_id` ASC) USING BTREE,
+  INDEX `idx_applicant_id`(`applicant_id` ASC) USING BTREE,
+  INDEX `idx_developer_id`(`developer_id` ASC) USING BTREE,
+  INDEX `idx_status`(`status` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '需求售后申请表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for requirement_applicant
@@ -189,7 +272,7 @@ CREATE TABLE `requirement_applicant`  (
   `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT 'pending',
   `apply_time` datetime NULL DEFAULT NULL,
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 8 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for sys_user
@@ -211,7 +294,7 @@ CREATE TABLE `sys_user`  (
   `freeze_reason` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '冻结原因',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_username`(`username` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 8 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for user_api_quota
@@ -230,6 +313,6 @@ CREATE TABLE `user_api_quota`  (
   UNIQUE INDEX `uk_user_api`(`user_id` ASC, `api_id` ASC) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_api_id`(`api_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 49 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户API配额表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 50 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户API配额表' ROW_FORMAT = DYNAMIC;
 
 SET FOREIGN_KEY_CHECKS = 1;

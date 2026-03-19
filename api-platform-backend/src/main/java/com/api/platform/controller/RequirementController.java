@@ -1,12 +1,13 @@
 package com.api.platform.controller;
 
 import com.api.platform.common.Result;
-import com.api.platform.constants.SessionConstants;
 import com.api.platform.dto.RequirementApplyDTO;
 import com.api.platform.dto.RequirementApplicantSelectDTO;
 import com.api.platform.dto.RequirementCreateDTO;
+import com.api.platform.dto.RequirementDeliverDTO;
 import com.api.platform.dto.RequirementQueryDTO;
 import com.api.platform.service.RequirementService;
+import com.api.platform.utils.SessionUtils;
 import com.api.platform.vo.PageResultVO;
 import com.api.platform.vo.RequirementVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -40,90 +41,77 @@ public class RequirementController {
 
     @PostMapping("/create")
     public Result<RequirementVO> create(@Validated @RequestBody RequirementCreateDTO createDTO, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         RequirementVO vo = requirementService.create(userId, createDTO);
         return Result.success(vo);
     }
 
     @PutMapping("/update/{id}")
     public Result<RequirementVO> update(@PathVariable Long id, @Validated @RequestBody RequirementCreateDTO updateDTO, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         RequirementVO vo = requirementService.update(userId, id, updateDTO);
         return Result.success(vo);
     }
 
     @DeleteMapping("/delete/{id}")
     public Result<Void> delete(@PathVariable Long id, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         requirementService.delete(userId, id);
         return Result.success();
     }
 
     @PostMapping("/apply/{id}")
     public Result<Void> apply(@PathVariable Long id, @Validated @RequestBody RequirementApplyDTO applyDTO, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         requirementService.apply(userId, id, applyDTO);
         return Result.success();
     }
 
     @PostMapping("/withdraw-apply/{id}")
     public Result<Void> withdrawApply(@PathVariable Long id, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         requirementService.withdrawApply(userId, id);
         return Result.success();
     }
 
     @PostMapping("/select-applicant/{id}")
     public Result<Void> selectApplicant(@PathVariable Long id, @Validated @RequestBody RequirementApplicantSelectDTO selectDTO, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         requirementService.selectApplicant(userId, id, selectDTO);
         return Result.success();
     }
 
     @PostMapping("/complete/{id}")
     public Result<Void> complete(@PathVariable Long id, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         requirementService.complete(userId, id);
         return Result.success();
     }
 
     @PostMapping("/cancel/{id}")
     public Result<Void> cancel(@PathVariable Long id, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         requirementService.cancel(userId, id);
+        return Result.success();
+    }
+
+    @PostMapping("/deliver/{id}")
+    public Result<Void> deliver(@PathVariable Long id, @Validated @RequestBody RequirementDeliverDTO deliverDTO, HttpSession session) {
+        Long userId = SessionUtils.getCurrentUserId(session);
+        requirementService.deliver(userId, id, deliverDTO);
+        return Result.success();
+    }
+
+    @PostMapping("/confirm-delivery/{id}")
+    public Result<Void> confirmDelivery(@PathVariable Long id, HttpSession session) {
+        Long userId = SessionUtils.getCurrentUserId(session);
+        requirementService.confirmDelivery(userId, id);
         return Result.success();
     }
 
     @GetMapping("/my-requirements")
     public Result<PageResultVO<RequirementVO>> getMyRequirements(RequirementQueryDTO queryDTO, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         String type = queryDTO.getStatus();
         IPage<RequirementVO> page;
         if ("applied".equals(type)) {

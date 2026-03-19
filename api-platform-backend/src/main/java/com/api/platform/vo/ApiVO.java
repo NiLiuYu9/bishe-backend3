@@ -47,6 +47,8 @@ public class ApiVO implements Serializable {
 
     private Integer callLimit;
 
+    private Integer whitelistEnabled;
+
     private String status;
 
     private LocalDateTime createTime;

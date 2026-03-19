@@ -20,6 +20,10 @@ public final class VoConverterUtils {
     private VoConverterUtils() {
     }
 
+    public static ApiVO convertToApiVO(ApiInfo apiInfo) {
+        return convertToApiVO(apiInfo, (Map<Long, String>) null, (Map<Long, String>) null);
+    }
+
     public static ApiVO convertToApiVO(ApiInfo apiInfo, Map<Long, String> typeNameMap, Map<Long, String> usernameMap) {
         if (apiInfo == null) {
             return null;
@@ -102,5 +106,32 @@ public final class VoConverterUtils {
         return users.stream()
                 .map(VoConverterUtils::convertToUserVO)
                 .collect(Collectors.toList());
+    }
+
+    public static ApiInfo convertToApiInfo(ApiVO apiVO) {
+        if (apiVO == null) {
+            return null;
+        }
+        ApiInfo apiInfo = new ApiInfo();
+        apiInfo.setId(apiVO.getId());
+        apiInfo.setName(apiVO.getName());
+        apiInfo.setDescription(apiVO.getDescription());
+        apiInfo.setTypeId(apiVO.getTypeId());
+        apiInfo.setUserId(apiVO.getUserId());
+        apiInfo.setMethod(apiVO.getMethod());
+        apiInfo.setEndpoint(apiVO.getEndpoint());
+        apiInfo.setTargetUrl(apiVO.getTargetUrl());
+        apiInfo.setPrice(apiVO.getPrice());
+        apiInfo.setPriceUnit(apiVO.getPriceUnit());
+        apiInfo.setCallLimit(apiVO.getCallLimit());
+        apiInfo.setStatus(apiVO.getStatus());
+        apiInfo.setCreateTime(apiVO.getCreateTime());
+        apiInfo.setUpdateTime(apiVO.getUpdateTime());
+        apiInfo.setDocUrl(apiVO.getDocUrl());
+        apiInfo.setRating(apiVO.getRating());
+        apiInfo.setInvokeCount(apiVO.getInvokeCount());
+        apiInfo.setSuccessCount(apiVO.getSuccessCount());
+        apiInfo.setFailCount(apiVO.getFailCount());
+        return apiInfo;
     }
 }

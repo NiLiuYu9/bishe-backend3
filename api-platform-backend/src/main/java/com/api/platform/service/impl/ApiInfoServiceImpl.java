@@ -238,6 +238,7 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         vo.setPrice(apiInfo.getPrice());
         vo.setPriceUnit(apiInfo.getPriceUnit());
         vo.setCallLimit(apiInfo.getCallLimit());
+        vo.setWhitelistEnabled(apiInfo.getWhitelistEnabled() != null ? apiInfo.getWhitelistEnabled() : 0);
         vo.setStatus(apiInfo.getStatus());
         vo.setCreateTime(apiInfo.getCreateTime());
         vo.setUpdateTime(apiInfo.getUpdateTime());

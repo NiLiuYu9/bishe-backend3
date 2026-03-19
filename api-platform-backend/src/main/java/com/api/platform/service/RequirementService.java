@@ -3,6 +3,7 @@ package com.api.platform.service;
 import com.api.platform.dto.RequirementApplyDTO;
 import com.api.platform.dto.RequirementApplicantSelectDTO;
 import com.api.platform.dto.RequirementCreateDTO;
+import com.api.platform.dto.RequirementDeliverDTO;
 import com.api.platform.dto.RequirementQueryDTO;
 import com.api.platform.entity.Requirement;
 import com.api.platform.vo.RequirementVO;
@@ -30,6 +31,10 @@ public interface RequirementService extends IService<Requirement> {
     void complete(Long userId, Long requirementId);
 
     void cancel(Long userId, Long requirementId);
+
+    void deliver(Long userId, Long requirementId, RequirementDeliverDTO deliverDTO);
+
+    void confirmDelivery(Long userId, Long requirementId);
 
     IPage<RequirementVO> getMyPublished(Long userId, RequirementQueryDTO queryDTO);
 

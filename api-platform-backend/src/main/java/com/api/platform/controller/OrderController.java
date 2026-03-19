@@ -1,11 +1,11 @@
 package com.api.platform.controller;
 
 import com.api.platform.common.Result;
-import com.api.platform.constants.SessionConstants;
 import com.api.platform.dto.OrderCreateDTO;
 import com.api.platform.dto.OrderQueryDTO;
 import com.api.platform.dto.OrderRatingDTO;
 import com.api.platform.service.OrderInfoService;
+import com.api.platform.utils.SessionUtils;
 import com.api.platform.vo.OrderVO;
 import com.api.platform.vo.PageResultVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -24,21 +24,15 @@ public class OrderController {
 
     @PostMapping("/create")
     public Result<OrderVO> createOrder(@Validated @RequestBody OrderCreateDTO createDTO, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        String username = (String) session.getAttribute(SessionConstants.USERNAME);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
+        String username = SessionUtils.getCurrentUsername(session);
         OrderVO orderVO = orderInfoService.createOrder(userId, username, createDTO);
         return Result.success(orderVO);
     }
 
     @GetMapping("/list")
     public Result<PageResultVO<OrderVO>> getMyOrders(OrderQueryDTO queryDTO, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         queryDTO.setBuyerId(userId);
         IPage<OrderVO> orderVOPage = orderInfoService.pageOrderList(queryDTO);
         return Result.success(PageResultVO.of(orderVOPage.getRecords(), orderVOPage.getTotal()));
@@ -46,10 +40,7 @@ public class OrderController {
 
     @GetMapping("/detail/{id}")
     public Result<OrderVO> getOrderDetail(@PathVariable Long id, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         OrderVO orderVO = orderInfoService.getOrderDetail(id);
         if (orderVO == null) {
             return Result.failed("订单不存在");
@@ -62,10 +53,7 @@ public class OrderController {
 
     @PutMapping("/update-status/{id}")
     public Result<Void> updateOrderStatus(@PathVariable Long id, @RequestParam String status, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         OrderVO orderVO = orderInfoService.getOrderDetail(id);
         if (orderVO == null) {
             return Result.failed("订单不存在");
@@ -79,10 +67,7 @@ public class OrderController {
 
     @DeleteMapping("/delete/{id}")
     public Result<Void> deleteOrder(@PathVariable Long id, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
         OrderVO orderVO = orderInfoService.getOrderDetail(id);
         if (orderVO == null) {
             return Result.failed("订单不存在");
@@ -96,16 +81,9 @@ public class OrderController {
 
     @PostMapping("/rate/{id}")
     public Result<Void> rateOrder(@PathVariable Long id, @Validated @RequestBody OrderRatingDTO ratingDTO, HttpSession session) {
-        Long userId = (Long) session.getAttribute(SessionConstants.USER_ID);
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
-        try {
-            orderInfoService.rateOrder(id, userId, ratingDTO);
-            return Result.success();
-        } catch (RuntimeException e) {
-            return Result.failed(e.getMessage());
-        }
+        Long userId = SessionUtils.getCurrentUserId(session);
+        orderInfoService.rateOrder(id, userId, ratingDTO);
+        return Result.success();
     }
 
 }

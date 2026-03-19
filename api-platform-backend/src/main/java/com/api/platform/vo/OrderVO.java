@@ -30,10 +30,13 @@ public class OrderVO implements Serializable {
 
     private BigDecimal rating;
 
+    private String reviewContent;
+
+    private Long reviewId;
+
     private String createTime;
 
     private String payTime;
 
     private String completeTime;
-
 }

@@ -43,4 +43,6 @@ public class RequirementVO implements Serializable {
 
     private String myApplyStatus;
 
+    private String deliveryUrl;
+
 }

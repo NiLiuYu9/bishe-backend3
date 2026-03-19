@@ -5,9 +5,11 @@ import com.api.platform.dto.OrderCreateDTO;
 import com.api.platform.dto.OrderQueryDTO;
 import com.api.platform.dto.OrderRatingDTO;
 import com.api.platform.entity.ApiInfo;
+import com.api.platform.entity.ApiReview;
 import com.api.platform.entity.OrderInfo;
 import com.api.platform.entity.User;
 import com.api.platform.mapper.ApiInfoMapper;
+import com.api.platform.mapper.ApiReviewMapper;
 import com.api.platform.mapper.OrderInfoMapper;
 import com.api.platform.mapper.UserMapper;
 import com.api.platform.service.OrderInfoService;
@@ -39,6 +41,9 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
 
     @Autowired
     private UserApiQuotaService userApiQuotaService;
+
+    @Autowired
+    private ApiReviewMapper apiReviewMapper;
 
     @Override
     public OrderVO createOrder(Long userId, String username, OrderCreateDTO createDTO) {
@@ -101,6 +106,7 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
             throw new RuntimeException("订单不存在");
         }
         String oldStatus = orderInfo.getStatus();
+        validateStatusTransition(oldStatus, status);
         orderInfo.setStatus(status);
         if ("completed".equals(status)) {
             if (!"paid".equals(oldStatus) && !"completed".equals(oldStatus)) {
@@ -115,6 +121,30 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
             }
         }
         updateById(orderInfo);
+    }
+
+    private void validateStatusTransition(String currentStatus, String newStatus) {
+        if (currentStatus.equals(newStatus)) {
+            return;
+        }
+        switch (currentStatus) {
+            case "pending":
+                if (!"paid".equals(newStatus) && !"cancelled".equals(newStatus)) {
+                    throw new RuntimeException("待支付订单只能变更为已支付或已取消");
+                }
+                break;
+            case "paid":
+                if (!"completed".equals(newStatus) && !"cancelled".equals(newStatus)) {
+                    throw new RuntimeException("已支付订单只能变更为已完成或已取消");
+                }
+                break;
+            case "completed":
+                throw new RuntimeException("已完成订单不能变更状态");
+            case "cancelled":
+                throw new RuntimeException("已取消订单不能变更状态");
+            default:
+                throw new RuntimeException("未知的订单状态");
+        }
     }
 
     @Override
@@ -136,6 +166,12 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
         }
         orderInfo.setRating(ratingDTO.getRating());
         updateById(orderInfo);
+        ApiReview review = apiReviewMapper.selectOne(new LambdaQueryWrapper<ApiReview>()
+                .eq(ApiReview::getOrderId, orderId));
+        if (review != null) {
+            review.setRating(ratingDTO.getRating());
+            apiReviewMapper.updateById(review);
+        }
     }
 
     @Override
@@ -176,6 +212,13 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
         }
         if (orderInfo.getCompleteTime() != null) {
             orderVO.setCompleteTime(orderInfo.getCompleteTime().format(formatter));
+        }
+        ApiReview review = apiReviewMapper.selectOne(new LambdaQueryWrapper<ApiReview>()
+                .eq(ApiReview::getOrderId, orderInfo.getId())
+                .eq(ApiReview::getReplyType, 0));
+        if (review != null) {
+            orderVO.setReviewContent(review.getContent());
+            orderVO.setReviewId(review.getId());
         }
         return orderVO;
     }

@@ -11,4 +11,6 @@ public interface AccessKeyService extends IService<User> {
 
     User validateAccessKey(String accessKey, String secretKey);
 
+    User getOrGenerateAccessKey(Long userId);
+
 }
