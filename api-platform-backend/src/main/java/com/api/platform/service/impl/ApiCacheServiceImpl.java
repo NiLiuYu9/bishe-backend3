@@ -6,6 +6,8 @@ import com.api.platform.dto.ApiParamDTO;
 import com.api.platform.service.ApiCacheService;
 import com.api.platform.vo.ApiVO;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -89,7 +91,34 @@ public class ApiCacheServiceImpl implements ApiCacheService {
 
     @Override
     public void clearListCache() {
-        stringRedisTemplate.keys(API_LIST_KEY + "*").forEach(stringRedisTemplate::delete);
+        ScanOptions scanOptions = ScanOptions.scanOptions()
+                .match(API_LIST_KEY + "*")
+                .count(1000)
+                .build();
+        try (Cursor<String> cursor = stringRedisTemplate.scan(scanOptions)) {
+            while (cursor.hasNext()) {
+                stringRedisTemplate.delete(cursor.next());
+            }
+        }
+    }
+
+    @Override
+    public void clearRateLimitCache(Long apiId) {
+        ApiVO apiVO = getApiDetailFromCache(apiId);
+        if (apiVO == null || apiVO.getEndpoint() == null) {
+            return;
+        }
+        String endpoint = apiVO.getEndpoint();
+        String pattern = RATE_LIMIT_KEY + "*:" + endpoint;
+        ScanOptions scanOptions = ScanOptions.scanOptions()
+                .match(pattern)
+                .count(1000)
+                .build();
+        try (Cursor<String> cursor = stringRedisTemplate.scan(scanOptions)) {
+            while (cursor.hasNext()) {
+                stringRedisTemplate.delete(cursor.next());
+            }
+        }
     }
 
     private ApiVO convertMapToApiVO(Map<Object, Object> map) {

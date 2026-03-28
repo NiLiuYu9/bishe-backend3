@@ -55,8 +55,10 @@ public class RequirementAfterSaleController {
     }
 
     @GetMapping("/detail/{id}")
-    public Result<RequirementAfterSaleVO> getDetail(@PathVariable Long id) {
-        RequirementAfterSaleVO vo = afterSaleService.getDetailById(id);
+    public Result<RequirementAfterSaleVO> getDetail(@PathVariable Long id, HttpSession session) {
+        Long userId = SessionUtils.getCurrentUserId(session);
+        boolean isAdmin = SessionUtils.isAdmin(session);
+        RequirementAfterSaleVO vo = afterSaleService.getDetailByIdWithPermission(id, userId, isAdmin);
         if (vo == null) {
             return Result.failed("售后申请不存在");
         }
@@ -64,7 +66,10 @@ public class RequirementAfterSaleController {
     }
 
     @GetMapping("/list")
-    public Result<PageResultVO<RequirementAfterSaleVO>> getList(AfterSaleQueryDTO queryDTO) {
+    public Result<PageResultVO<RequirementAfterSaleVO>> getList(AfterSaleQueryDTO queryDTO, HttpSession session) {
+        if (!SessionUtils.isAdmin(session)) {
+            return Result.failed("无权限访问，仅管理员可查看所有售后列表");
+        }
         IPage<RequirementAfterSaleVO> page = afterSaleService.pageList(queryDTO);
         return Result.success(PageResultVO.of(page.getRecords(), page.getTotal()));
     }

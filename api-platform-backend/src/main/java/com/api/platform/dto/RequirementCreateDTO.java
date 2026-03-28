@@ -35,6 +35,8 @@ public class RequirementCreateDTO implements Serializable {
     @NotNull(message = "截止日期不能为空")
     private LocalDate deadline;
 
+    private List<String> tags;
+
     public String getRequestParamsJson() {
         if (requestParams == null) {
             return null;

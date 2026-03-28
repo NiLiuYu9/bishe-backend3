@@ -16,6 +16,8 @@ public interface ApiCacheService {
 
     boolean isNullValueCached(Long id);
 
+    void clearRateLimitCache(Long apiId);
+
     Long getApiIdByPath(String endpoint, String method);
 
     void cachePathMapping(String endpoint, String method, Long apiId);

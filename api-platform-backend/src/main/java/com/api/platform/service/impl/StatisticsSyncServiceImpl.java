@@ -8,6 +8,7 @@ import com.api.platform.mapper.OrderInfoMapper;
 import com.api.platform.service.ApiCacheService;
 import com.api.platform.service.StatisticsSyncService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.ScanOptions;
@@ -21,6 +22,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+@Slf4j
 @Service
 public class StatisticsSyncServiceImpl implements StatisticsSyncService {
 
@@ -58,11 +60,11 @@ public class StatisticsSyncServiceImpl implements StatisticsSyncService {
                 try {
                     processKey(key, today);
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    log.error("处理Redis key失败: {}", key, e);
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("同步Redis数据到数据库失败", e);
         }
     }
 
@@ -107,19 +109,16 @@ public class StatisticsSyncServiceImpl implements StatisticsSyncService {
     }
 
     private void saveOrUpdate(ApiInvokeDaily entity) {
-        ApiInvokeDaily existing = apiInvokeDailyMapper.selectOne(
-                new LambdaQueryWrapper<ApiInvokeDaily>()
-                        .eq(ApiInvokeDaily::getApiId, entity.getApiId())
-                        .eq(ApiInvokeDaily::getCallerId, entity.getCallerId())
-                        .eq(ApiInvokeDaily::getStatDate, entity.getStatDate())
+        int updated = apiInvokeDailyMapper.incrementCounts(
+                entity.getApiId(), 
+                entity.getCallerId(), 
+                entity.getStatDate(),
+                entity.getTotalCount(), 
+                entity.getSuccessCount(), 
+                entity.getFailCount()
         );
-
-        if (existing != null) {
-            existing.setTotalCount(existing.getTotalCount() + entity.getTotalCount());
-            existing.setSuccessCount(existing.getSuccessCount() + entity.getSuccessCount());
-            existing.setFailCount(existing.getFailCount() + entity.getFailCount());
-            apiInvokeDailyMapper.updateById(existing);
-        } else {
+        
+        if (updated == 0) {
             apiInvokeDailyMapper.insert(entity);
         }
     }

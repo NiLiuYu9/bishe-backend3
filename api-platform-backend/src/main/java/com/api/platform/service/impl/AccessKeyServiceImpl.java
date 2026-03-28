@@ -20,7 +20,14 @@ public class AccessKeyServiceImpl extends ServiceImpl<UserMapper, User> implemen
 
     private static final String SALT = "api_platform";
     
-    private final ConcurrentHashMap<Long, ReentrantLock> userLocks = new ConcurrentHashMap<>();
+    private static final int LOCK_STRIPES = 64;
+    
+    private final ConcurrentHashMap<Integer, ReentrantLock> stripedLocks = new ConcurrentHashMap<>();
+    
+    private ReentrantLock getLock(Long userId) {
+        int stripe = (int) (userId % LOCK_STRIPES);
+        return stripedLocks.computeIfAbsent(stripe, k -> new ReentrantLock());
+    }
 
     @Override
     public void generateAccessKey(Long userId) {
@@ -39,7 +46,7 @@ public class AccessKeyServiceImpl extends ServiceImpl<UserMapper, User> implemen
 
     @Override
     public void regenerateAccessKey(Long userId) {
-        ReentrantLock lock = userLocks.computeIfAbsent(userId, k -> new ReentrantLock());
+        ReentrantLock lock = getLock(userId);
         lock.lock();
         try {
             User user = getById(userId);
@@ -56,7 +63,6 @@ public class AccessKeyServiceImpl extends ServiceImpl<UserMapper, User> implemen
             update(updateWrapper);
         } finally {
             lock.unlock();
-            userLocks.remove(userId);
         }
     }
 

@@ -1,0 +1,923 @@
+================================================================================
+                    API平台数据库表关系与业务流程说明文档
+================================================================================
+生成日期: 2026-03-27
+项目名称: API开放平台 (api-platform)
+
+================================================================================
+一、数据库表清单（共17张表）
+================================================================================
+
+1. sys_user                  - 用户表
+2. api_type                  - API类型表
+3. api_info                  - API信息表
+4. api_favorite              - API收藏表
+5. api_whitelist             - API白名单表
+6. api_test_record           - API测试记录表
+7. api_invoke_daily          - API调用每日统计表
+8. api_review                - API评价表
+9. user_api_quota            - 用户API配额表
+10. user_tag                 - 用户技能标签表
+11. order_info               - 订单表
+12. requirement              - 需求表
+13. requirement_tag          - 需求技术标签表
+14. requirement_applicant    - 需求申请人表
+15. requirement_after_sale   - 需求售后申请表
+16. after_sale_message       - 售后对话记录表
+17. notification_message     - 通知消息表
+
+
+================================================================================
+二、核心实体表详细说明
+================================================================================
+
+【1. sys_user - 用户表】
+--------------------------------------------------------------------------------
+字段说明:
+- id              : 主键ID
+- username        : 用户名（唯一）
+- password        : 密码（加密存储）
+- email           : 邮箱
+- phone           : 手机号
+- is_admin        : 是否管理员（0-普通用户，1-管理员）
+- access_key      : AccessKey（API调用认证）
+- secret_key      : SecretKey（API调用认证）
+- status          : 状态（0-禁用，1-启用）
+- freeze_reason   : 冻结原因
+- create_time     : 创建时间
+- update_time     : 更新时间
+- deleted         : 逻辑删除标识
+
+角色分类:
+- 管理员(is_admin=1): 负责审核API、处理售后纠纷、管理用户
+- 开发者(is_admin=0): 可上架API、接需求、响应售后
+- 普通用户(is_admin=0): 可购买API、发布需求、申请售后
+
+
+【2. api_type - API类型表】
+--------------------------------------------------------------------------------
+字段说明:
+- id              : 主键ID
+- name            : 类型名称（唯一）
+- description     : 类型描述
+- create_time     : 创建时间
+- update_time     : 更新时间
+- deleted         : 逻辑删除标识
+
+作用: 对API进行分类管理，如：图像识别、文本处理、数据查询等
+
+
+【3. api_info - API信息表】
+--------------------------------------------------------------------------------
+字段说明:
+- id                : 主键ID
+- type_id           : 类型ID（关联api_type.id）
+- user_id           : 开发者ID（关联sys_user.id）
+- name              : API名称
+- description       : API描述
+- method            : 请求方法（GET/POST/PUT/DELETE）
+- endpoint          : 接口地址
+- target_url        : 目标服务器地址
+- request_params    : 请求参数（JSON格式）
+- response_params   : 响应参数（JSON格式）
+- price             : 价格
+- price_unit        : 价格单位（per_call/per_month/per_year）
+- call_limit        : 调用限制（0表示无限制）
+- whitelist_enabled : 是否启用白名单（0-否，1-是）
+- status            : 状态（pending/approved/rejected/offline）
+- doc_url           : 文档地址
+- rating            : 评分（0-5）
+- invoke_count      : 总调用次数
+- success_count     : 成功次数
+- fail_count        : 失败次数
+- create_time       : 创建时间
+- update_time       : 更新时间
+- deleted           : 逻辑删除标识
+
+状态流转:
+pending(待审核) -> approved(已上架) / rejected(已拒绝)
+approved -> offline(已下架)
+
+
+【4. order_info - 订单表】
+--------------------------------------------------------------------------------
+字段说明:
+- id            : 主键ID
+- order_no      : 订单号（唯一）
+- api_id        : API ID（关联api_info.id）
+- api_name      : API名称（冗余存储）
+- buyer_id      : 买家ID（关联sys_user.id）
+- buyer_name    : 买家名称（冗余存储）
+- invoke_count  : 调用次数（-1表示无限）
+- price         : 订单金额
+- status        : 订单状态（pending/paid/completed/refunded/cancelled）
+- pay_trade_no  : 支付流水号
+- pay_method    : 支付方式
+- pay_time      : 支付时间
+- complete_time : 完成时间
+- rating        : 订单评分
+- create_time   : 创建时间
+- update_time   : 更新时间
+- deleted       : 逻辑删除标识
+
+订单状态流转:
+pending(待支付) -> paid(已支付) -> completed(已完成)
+             -> cancelled(已取消)
+paid -> refunded(已退款)
+
+
+【5. requirement - 需求表】
+--------------------------------------------------------------------------------
+字段说明:
+- id             : 主键ID
+- user_id        : 发布者ID（关联sys_user.id）
+- title          : 需求标题
+- description    : 需求描述
+- request_params : 请求参数
+- response_params: 响应参数
+- budget         : 预算金额
+- deadline       : 截止日期
+- status         : 状态（open/in_progress/completed/cancelled）
+- delivery_url   : 交付网址
+- create_time    : 创建时间
+- update_time    : 更新时间
+- deleted        : 逻辑删除标识
+
+需求状态流转:
+open(开放中) -> in_progress(开发中) -> completed(已完成)
+            -> cancelled(已取消)
+
+
+================================================================================
+三、关联表详细说明
+================================================================================
+
+【6. api_favorite - API收藏表】
+--------------------------------------------------------------------------------
+字段说明:
+- id          : 主键ID
+- user_id     : 用户ID（关联sys_user.id）
+- api_id      : API ID（关联api_info.id）
+- create_time : 收藏时间
+
+关系: 用户 <-> API（多对多收藏关系）
+
+
+【7. api_whitelist - API白名单表】
+--------------------------------------------------------------------------------
+字段说明:
+- id          : 主键ID
+- api_id      : API ID（关联api_info.id）
+- user_id     : 白名单用户ID（关联sys_user.id）
+- create_time : 添加时间
+
+关系: API <-> 用户（多对多白名单关系）
+作用: 当API启用白名单时，只有白名单用户才能调用
+
+
+【8. api_test_record - API测试记录表】
+--------------------------------------------------------------------------------
+字段说明:
+- id           : 主键ID
+- api_id       : API ID（关联api_info.id）
+- api_name     : API名称（冗余存储）
+- user_id      : 用户ID（关联sys_user.id）
+- params       : 请求参数（JSON格式）
+- result       : 响应结果（JSON格式）
+- success      : 是否成功（0-失败，1-成功）
+- error_msg    : 错误信息
+- response_time: 响应时间（毫秒）
+- status_code  : HTTP状态码
+- type         : 记录类型（0-自动调用记录，1-手动保存记录）
+- create_time  : 创建时间
+
+关系: 用户 -> API（一对多测试记录）
+
+
+【9. api_invoke_daily - API调用每日统计表】
+--------------------------------------------------------------------------------
+字段说明:
+- id            : 主键ID
+- api_id        : API ID（关联api_info.id）
+- api_name      : API名称（冗余存储）
+- caller_id     : 调用者用户ID（关联sys_user.id）
+- api_owner_id  : API所有者用户ID（关联sys_user.id）
+- stat_date     : 统计日期
+- total_count   : 总调用次数
+- success_count : 成功次数
+- fail_count    : 失败次数
+- create_time   : 创建时间
+- update_time   : 更新时间
+
+唯一约束: (api_id, caller_id, stat_date)
+关系: 用户 -> API（每日调用统计）
+
+
+【10. api_review - API评价表】
+--------------------------------------------------------------------------------
+字段说明:
+- id         : 主键ID
+- order_id   : 订单ID（关联order_info.id）
+- api_id     : API ID（关联api_info.id）
+- user_id    : 评价用户ID（关联sys_user.id）
+- rating     : 评分（0.5-5.0）
+- content    : 评价内容
+- reply      : 开发者回复
+- reply_time : 回复时间
+- parent_id  : 父评论ID（用于回复关系）
+- reply_type : 回复类型（0-原评论，1-上架者回复，2-评论者回复）
+- create_time: 创建时间
+
+关系: 订单 -> 评价（一对一）
+      用户 -> 评价（一对多）
+      API -> 评价（一对多）
+
+
+【11. user_api_quota - 用户API配额表】
+--------------------------------------------------------------------------------
+字段说明:
+- id             : 主键ID
+- user_id        : 用户ID（关联sys_user.id）
+- api_id         : API ID（关联api_info.id）
+- total_count    : 总购买次数
+- used_count     : 已使用次数
+- remaining_count: 剩余次数
+- create_time    : 创建时间
+- update_time    : 更新时间
+
+唯一约束: (user_id, api_id)
+关系: 用户 <-> API（多对多购买配额关系）
+
+
+【12. user_tag - 用户技能标签表】
+--------------------------------------------------------------------------------
+字段说明:
+- id          : 主键ID
+- user_id     : 用户ID（关联sys_user.id）
+- tag_name    : 标签名称
+- create_time : 创建时间
+
+关系: 用户 -> 标签（一对多）
+作用: 标记用户的技术技能，如：Java、Python、前端等
+
+
+【13. requirement_tag - 需求技术标签表】
+--------------------------------------------------------------------------------
+字段说明:
+- id            : 主键ID
+- requirement_id: 需求ID（关联requirement.id）
+- tag_name      : 标签名称
+- create_time   : 创建时间
+
+关系: 需求 -> 标签（一对多）
+作用: 标记需求所需的技术栈
+
+
+【14. requirement_applicant - 需求申请人表】
+--------------------------------------------------------------------------------
+字段说明:
+- id            : 主键ID
+- requirement_id: 需求ID（关联requirement.id）
+- user_id       : 申请人ID（关联sys_user.id）
+- description   : 申请说明
+- status        : 申请状态（pending/accepted/rejected）
+- apply_time    : 申请时间
+
+关系: 需求 <-> 用户（多对多申请关系）
+状态: pending(待处理) -> accepted(已接受) / rejected(已拒绝)
+
+
+【15. requirement_after_sale - 需求售后申请表】
+--------------------------------------------------------------------------------
+字段说明:
+- id                     : 主键ID
+- requirement_id         : 需求ID（关联requirement.id）
+- applicant_id           : 申请人ID（需求发布方，关联sys_user.id）
+- developer_id           : 开发者ID（关联sys_user.id）
+- reason                 : 售后原因
+- unimplemented_features : 未实现的功能点
+- developer_response     : 开发者回应
+- developer_response_time: 开发者回应时间
+- admin_id               : 裁定管理员ID（关联sys_user.id）
+- admin_decision         : 管理员裁定说明
+- admin_decision_time    : 裁定时间
+- status                 : 状态（pending/resolved/rejected）
+- result                 : 裁定结果（completed/refunded）
+- create_time            : 创建时间
+- update_time            : 更新时间
+
+关系: 需求 -> 售后申请（一对多）
+状态: pending(待处理) -> resolved(已解决) / rejected(已拒绝)
+
+
+【16. after_sale_message - 售后对话记录表】
+--------------------------------------------------------------------------------
+字段说明:
+- id           : 主键ID
+- after_sale_id: 售后ID（关联requirement_after_sale.id）
+- sender_id    : 发送者ID（关联sys_user.id）
+- sender_type  : 发送者类型（applicant/developer/admin）
+- content      : 消息内容
+- create_time  : 创建时间
+
+关系: 售后申请 -> 对话记录（一对多）
+
+
+【17. notification_message - 通知消息表】
+--------------------------------------------------------------------------------
+字段说明:
+- id          : 主键ID
+- user_id     : 接收用户ID（关联sys_user.id）
+- type        : 消息类型
+- title       : 消息标题
+- content     : 消息内容
+- related_id  : 关联业务ID
+- related_type: 关联业务类型
+- is_read     : 是否已读（0-未读，1-已读）
+- create_time : 创建时间
+
+关系: 用户 -> 通知消息（一对多）
+
+
+================================================================================
+四、表关系图（ER关系）
+================================================================================
+
+                              ┌─────────────────┐
+                              │    sys_user     │
+                              │    (用户表)      │
+                              └────────┬────────┘
+                                       │
+         ┌──────────────┬──────────────┼──────────────┬──────────────┐
+         │              │              │              │              │
+         ▼              ▼              ▼              ▼              ▼
+   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
+   │ user_tag │   │api_info  │   │ order_   │   │require-  │   │require-  │
+   │(用户标签) │   │(API信息) │   │  info    │   │  ment    │   │ment_     │
+   └──────────┘   └────┬─────┘   │ (订单)   │   │ (需求)   │   │applicant │
+                       │         └────┬─────┘   └────┬─────┘   └──────────┘
+                       │              │              │
+         ┌─────────────┼──────────────┤              │
+         │             │              │              │
+         ▼             ▼              ▼              ▼
+   ┌──────────┐  ┌──────────┐   ┌──────────┐   ┌──────────┐
+   │api_      │  │api_      │   │api_      │   │require-  │
+   │favorite  │  │whitelist │   │ review   │   │ment_tag  │
+   │(收藏)    │  │(白名单)  │   │(评价)    │   │(需求标签) │
+   └──────────┘  └──────────┘   └──────────┘   └──────────┘
+                                   
+   ┌──────────┐  ┌──────────┐   ┌──────────┐   ┌──────────┐
+   │api_test_ │  │api_invoke│   │user_api_ │   │require-  │
+   │record    │  │_daily    │   │quota     │   │ment_     │
+   │(测试记录) │  │(调用统计) │   │(用户配额) │   │after_sale│
+   └──────────┘  └──────────┘   └──────────┘   │(售后申请) │
+                                               └────┬─────┘
+                                                    │
+                                                    ▼
+                                               ┌──────────┐
+                                               │after_sale│
+                                               │_message  │
+                                               │(售后对话) │
+                                               └──────────┘
+
+   ┌──────────┐
+   │api_type  │◄──────── api_info.type_id
+   │(API类型) │
+   └──────────┘
+
+   ┌──────────────────┐
+   │notification_     │◄──────── sys_user.id
+   │message(通知消息)  │
+   └──────────────────┘
+
+
+================================================================================
+五、核心业务流程
+================================================================================
+
+【流程1: API上架与审核流程】
+--------------------------------------------------------------------------------
+1. 开发者登录系统
+2. 开发者创建API信息（api_info），状态为pending
+3. 管理员审核API
+   - 审核通过: status -> approved，API可被用户浏览和购买
+   - 审核拒绝: status -> rejected，开发者需修改后重新提交
+4. 开发者可下架API（status -> offline）
+
+
+【流程2: API购买与调用流程】
+--------------------------------------------------------------------------------
+1. 用户浏览API列表（api_info，status=approved）
+2. 用户可收藏API（api_favorite）
+3. 用户可测试API（api_test_record）
+4. 用户创建订单（order_info，status=pending）
+5. 用户支付订单
+   - 支付成功: status -> paid
+   - 更新用户配额（user_api_quota）
+6. 用户调用API
+   - 检查白名单（api_whitelist，如启用）
+   - 检查配额（user_api_quota）
+   - 记录调用日志（api_invoke_daily）
+   - 更新API统计（api_info.invoke_count等）
+7. 订单完成（status -> completed）
+
+
+【流程3: API评价流程】
+--------------------------------------------------------------------------------
+1. 用户完成订单后可评价
+2. 创建评价记录（api_review）
+3. 开发者可回复评价
+4. 评价影响API评分（api_info.rating）
+
+
+【流程4: 需求发布与接单流程】
+--------------------------------------------------------------------------------
+1. 用户发布需求（requirement，status=open）
+2. 添加需求标签（requirement_tag）
+3. 开发者申请接单（requirement_applicant，status=pending）
+4. 需求发布者选择开发者
+   - 接受申请: applicant.status -> accepted，requirement.status -> in_progress
+   - 拒绝申请: applicant.status -> rejected
+5. 开发者开发并提交交付网址（delivery_url）
+6. 需求完成（requirement.status -> completed）
+
+
+【流程5: 需求售后流程】
+--------------------------------------------------------------------------------
+1. 需求发布者发起售后申请（requirement_after_sale，status=pending）
+2. 开发者回应售后（developer_response）
+3. 双方沟通（after_sale_message）
+4. 管理员介入裁定
+   - 裁定解决: status -> resolved，result -> completed/refunded
+   - 驳回申请: status -> rejected
+
+
+【流程6: 通知消息流程】
+--------------------------------------------------------------------------------
+系统在以下场景发送通知（notification_message）:
+- API审核结果通知
+- 订单状态变更通知
+- 需求申请结果通知
+- 售后进度通知
+- 评价回复通知
+
+
+================================================================================
+六、数据关联关系总结
+================================================================================
+
+【一对多关系】
+--------------------------------------------------------------------------------
+- sys_user -> api_info           : 一个用户可发布多个API
+- sys_user -> order_info         : 一个用户可有多个订单
+- sys_user -> requirement        : 一个用户可发布多个需求
+- sys_user -> user_tag           : 一个用户可有多个技能标签
+- sys_user -> api_test_record    : 一个用户可有多个测试记录
+- sys_user -> notification_message: 一个用户可接收多条通知
+- api_type -> api_info           : 一个类型下可有多个API
+- api_info -> api_test_record    : 一个API可有多个测试记录
+- api_info -> api_invoke_daily   : 一个API可有多条每日统计
+- api_info -> api_review         : 一个API可有多条评价
+- order_info -> api_review       : 一个订单对应一条评价
+- requirement -> requirement_tag  : 一个需求可有多个技术标签
+- requirement -> requirement_applicant: 一个需求可有多个申请人
+- requirement -> requirement_after_sale: 一个需求可有多个售后申请
+- requirement_after_sale -> after_sale_message: 一个售后可有多条对话
+
+
+【多对多关系】
+--------------------------------------------------------------------------------
+- sys_user <-> api_info (通过api_favorite)    : 用户收藏API
+- sys_user <-> api_info (通过api_whitelist)   : API白名单用户
+- sys_user <-> api_info (通过user_api_quota)  : 用户购买API配额
+- sys_user <-> api_info (通过api_invoke_daily): 用户调用API统计
+- sys_user <-> requirement (通过requirement_applicant): 用户申请需求
+
+
+【外键关联】
+--------------------------------------------------------------------------------
+api_info.type_id          -> api_type.id
+api_info.user_id          -> sys_user.id
+order_info.api_id         -> api_info.id
+order_info.buyer_id       -> sys_user.id
+api_review.order_id       -> order_info.id
+api_review.api_id         -> api_info.id
+api_review.user_id        -> sys_user.id
+requirement.user_id       -> sys_user.id
+requirement_applicant.requirement_id -> requirement.id
+requirement_applicant.user_id -> sys_user.id
+requirement_after_sale.requirement_id -> requirement.id
+requirement_after_sale.applicant_id -> sys_user.id
+requirement_after_sale.developer_id -> sys_user.id
+requirement_after_sale.admin_id -> sys_user.id
+after_sale_message.after_sale_id -> requirement_after_sale.id
+after_sale_message.sender_id -> sys_user.id
+notification_message.user_id -> sys_user.id
+
+
+================================================================================
+七、业务状态机
+================================================================================
+
+【API状态】
+pending(待审核) ──审核通过──► approved(已上架)
+      │                         
+      └──审核拒绝──► rejected(已拒绝)
+                      
+approved(已上架) ──下架──► offline(已下架)
+
+
+【订单状态】
+pending(待支付) ──支付──► paid(已支付) ──完成──► completed(已完成)
+      │                    │
+      └──取消──► cancelled  └──退款──► refunded(已退款)
+
+
+【需求状态】
+open(开放中) ──接单──► in_progress(开发中) ──交付──► completed(已完成)
+      │
+      └──取消──► cancelled(已取消)
+
+
+【售后状态】
+pending(待处理) ──解决──► resolved(已解决)
+      │
+      └──驳回──► rejected(已拒绝)
+
+
+【申请状态】
+pending(待处理) ──接受──► accepted(已接受)
+      │
+      └──拒绝──► rejected(已拒绝)
+
+
+================================================================================
+八、关键业务规则
+================================================================================
+
+1. API调用权限控制:
+   - 检查API状态必须为approved
+   - 检查用户配额(user_api_quota.remaining_count > 0)
+   - 如启用白名单，检查用户是否在白名单中
+
+2. 订单金额计算:
+   - 根据API价格(price)和调用次数(invoke_count)计算
+   - invoke_count=-1表示无限次调用
+
+3. API评分计算:
+   - 基于api_review表的评分平均值
+   - 每次评价后需更新api_info.rating
+
+4. 用户配额管理:
+   - 支付成功后增加total_count和remaining_count
+   - 每次调用后增加used_count，减少remaining_count
+
+5. 售后处理:
+   - 只有需求状态为completed时才能发起售后
+   - 管理员裁定后，根据result决定是否退款
+
+6. 通知触发:
+   - 关键业务操作后自动创建notification_message
+   - 通过related_id和related_type关联具体业务
+
+
+================================================================================
+九、测试数据生成指南（供AI参考）
+================================================================================
+
+【数据插入顺序】
+--------------------------------------------------------------------------------
+必须按以下顺序插入数据，避免外键约束错误:
+
+第1层（无依赖）:
+  1. sys_user          - 用户表
+  2. api_type          - API类型表
+
+第2层（依赖第1层）:
+  3. user_tag          - 用户技能标签（依赖sys_user）
+  4. api_info          - API信息（依赖sys_user, api_type）
+
+第3层（依赖第2层）:
+  5. api_favorite      - API收藏（依赖sys_user, api_info）
+  6. api_whitelist     - API白名单（依赖sys_user, api_info）
+  7. api_test_record   - API测试记录（依赖sys_user, api_info）
+  8. order_info        - 订单（依赖sys_user, api_info）
+
+第4层（依赖第3层）:
+  9. user_api_quota    - 用户配额（依赖order_info支付成功后）
+  10. api_review       - API评价（依赖order_info）
+  11. api_invoke_daily - 调用统计（依赖user_api_quota）
+  12. requirement      - 需求（依赖sys_user）
+  13. notification_message - 通知消息（依赖sys_user）
+
+第5层（依赖第4层）:
+  14. requirement_tag      - 需求标签（依赖requirement）
+  15. requirement_applicant - 需求申请（依赖requirement, sys_user）
+
+第6层（依赖第5层）:
+  16. requirement_after_sale - 售后申请（依赖requirement, sys_user）
+
+第7层（依赖第6层）:
+  17. after_sale_message - 售后对话（依赖requirement_after_sale, sys_user）
+
+
+【测试数据规模建议】
+--------------------------------------------------------------------------------
+建议生成以下规模的测试数据:
+
+sys_user              : 30条（1个管理员 + 10个开发者 + 19个普通用户）
+api_type              : 10条
+user_tag              : 50条（平均每个用户1-2个标签）
+api_info              : 20条（平均每个开发者2个API）
+api_favorite          : 30条
+api_whitelist         : 5条（少数API启用白名单）
+api_test_record       : 30条
+order_info            : 50条
+user_api_quota        : 40条（对应已支付的订单）
+api_review            : 20条
+api_invoke_daily      : 100条（多日多用户调用统计）
+requirement           : 10条
+requirement_tag       : 20条
+requirement_applicant : 15条
+requirement_after_sale: 3条
+after_sale_message    : 10条
+notification_message  : 20条
+
+
+【枚举值完整列表】
+--------------------------------------------------------------------------------
+1. sys_user.is_admin:
+   - 0: 普通用户
+   - 1: 管理员
+
+2. sys_user.status:
+   - 0: 禁用
+   - 1: 启用
+
+3. api_info.method:
+   - GET
+   - POST
+   - PUT
+   - DELETE
+
+4. api_info.price_unit:
+   - per_call: 按次计费
+   - per_month: 按月计费
+   - per_year: 按年计费
+
+5. api_info.status:
+   - pending: 待审核
+   - approved: 已上架
+   - rejected: 已拒绝
+   - offline: 已下架
+
+6. order_info.status:
+   - pending: 待支付
+   - paid: 已支付
+   - completed: 已完成
+   - refunded: 已退款
+   - cancelled: 已取消
+
+7. requirement.status:
+   - open: 开放中
+   - in_progress: 开发中
+   - completed: 已完成
+   - cancelled: 已取消
+
+8. requirement_applicant.status:
+   - pending: 待处理
+   - accepted: 已接受
+   - rejected: 已拒绝
+
+9. requirement_after_sale.status:
+   - pending: 待处理
+   - resolved: 已解决
+   - rejected: 已拒绝
+
+10. requirement_after_sale.result:
+    - completed: 完成
+    - refunded: 退款
+
+11. after_sale_message.sender_type:
+    - applicant: 申请人（需求发布方）
+    - developer: 开发者
+    - admin: 管理员
+
+12. api_test_record.type:
+    - 0: 自动调用记录
+    - 1: 手动保存记录
+
+13. api_review.reply_type:
+    - 0: 原评论
+    - 1: 上架者回复
+    - 2: 评论者回复
+
+14. notification_message.is_read:
+    - 0: 未读
+    - 1: 已读
+
+
+【数据示例值参考】
+--------------------------------------------------------------------------------
+1. api_type.name 示例:
+   - 图像识别
+   - 文本处理
+   - 语音识别
+   - 数据查询
+   - 地图服务
+   - 支付接口
+   - 短信服务
+   - 人脸识别
+   - OCR识别
+   - 翻译服务
+
+2. user_tag.tag_name 示例:
+   - Java
+   - Python
+   - JavaScript
+   - Vue
+   - React
+   - Spring Boot
+   - MySQL
+   - Redis
+   - 前端开发
+   - 后端开发
+   - 全栈开发
+   - 移动开发
+
+3. requirement_tag.tag_name 示例:
+   - Java
+   - Python
+   - REST API
+   - 微服务
+   - 数据库
+   - 前端
+   - 后端
+
+4. notification_message.type 示例:
+   - API_APPROVED: API审核通过
+   - API_REJECTED: API审核拒绝
+   - ORDER_PAID: 订单支付成功
+   - ORDER_COMPLETED: 订单完成
+   - REQUIREMENT_ACCEPTED: 需求申请被接受
+   - AFTER_SALE_UPDATE: 售后进度更新
+   - REVIEW_REPLY: 评价被回复
+
+5. notification_message.related_type 示例:
+   - api: API相关
+   - order: 订单相关
+   - requirement: 需求相关
+   - after_sale: 售后相关
+   - review: 评价相关
+
+6. request_params JSON示例:
+   {"param1": "value1", "param2": "value2"}
+
+7. response_params JSON示例:
+   {"code": 200, "data": {}, "message": "success"}
+
+
+【数据一致性约束】
+--------------------------------------------------------------------------------
+生成数据时必须遵守以下约束:
+
+1. 用户角色约束:
+   - is_admin=1的用户只能有1-2个（管理员）
+   - is_admin=0的用户中，部分作为开发者（发布API），部分作为普通用户
+
+2. API状态约束:
+   - 只有status=approved的API才能被购买和调用
+   - rejected状态的API不能有订单
+   - 大部分API应为approved状态（约70%）
+
+3. 订单约束:
+   - order_info.api_name 必须与 api_info.name 一致
+   - order_info.buyer_name 必须与 sys_user.username 一致
+   - order_info.price 应根据 api_info.price 和 invoke_count 计算
+   - 只有status=paid或completed的订单才生成 user_api_quota
+
+4. 配额约束:
+   - user_api_quota.total_count = order_info.invoke_count（如不为-1）
+   - user_api_quota.remaining_count = total_count - used_count
+   - used_count <= total_count
+
+5. 评价约束:
+   - api_review.order_id 必须是已完成的订单（status=completed）
+   - api_review.api_id 必须与 order_info.api_id 一致
+   - api_review.user_id 必须与 order_info.buyer_id 一致
+   - rating 范围: 0.5-5.0（步长0.5）
+
+6. 需求约束:
+   - requirement.user_id 应为普通用户（非管理员）
+   - in_progress状态的需求必须有accepted的applicant
+   - completed状态的需求必须有delivery_url
+
+7. 售后约束:
+   - requirement_after_sale.requirement_id 必须是completed状态的需求
+   - applicant_id 必须是需求发布者
+   - developer_id 必须是被接受的申请人
+   - 只有status=resolved时才有result值
+
+8. 调用统计约束:
+   - api_invoke_daily.api_owner_id 必须与 api_info.user_id 一致
+   - api_invoke_daily.api_name 必须与 api_info.name 一致
+   - 同一(api_id, caller_id, stat_date)组合唯一
+
+
+【数据分布建议】
+--------------------------------------------------------------------------------
+建议按以下比例分布数据:
+
+1. api_info.status 分布:
+   - approved: 70%
+   - pending: 15%
+   - rejected: 10%
+   - offline: 5%
+
+2. order_info.status 分布:
+   - completed: 50%
+   - paid: 20%
+   - pending: 15%
+   - cancelled: 10%
+   - refunded: 5%
+
+3. requirement.status 分布:
+   - completed: 40%
+   - in_progress: 30%
+   - open: 20%
+   - cancelled: 10%
+
+4. api_review.rating 分布:
+   - 5.0: 30%
+   - 4.5: 25%
+   - 4.0: 20%
+   - 3.5: 10%
+   - 3.0及以下: 15%
+
+
+【时间字段生成规则】
+--------------------------------------------------------------------------------
+1. create_time: 数据创建时间
+   - 范围: 近3个月内随机
+   - 格式: 'YYYY-MM-DD HH:MM:SS'
+
+2. update_time: 数据更新时间
+   - 通常等于create_time或稍晚
+   - 状态变更时更新
+
+3. 时间先后顺序:
+   - api_info.create_time < order_info.create_time
+   - order_info.create_time < order_info.pay_time < order_info.complete_time
+   - requirement.create_time < requirement_applicant.apply_time
+   - requirement_after_sale.create_time < after_sale_message.create_time
+
+
+【特殊字段处理】
+--------------------------------------------------------------------------------
+1. password: 使用BCrypt加密
+   - 示例加密值: '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH'
+   - 或使用明文后说明需加密
+
+2. access_key / secret_key: 生成唯一标识
+   - 格式: 'AK_' + 随机字符串
+   - 格式: 'SK_' + 随机字符串
+
+3. order_no: 订单号
+   - 格式: 'ORD' + 时间戳 + 随机数
+   - 示例: 'ORD20260327001'
+
+4. pay_trade_no: 支付流水号
+   - 格式: 'PAY' + 时间戳 + 随机数
+   - 示例: 'PAY20260327001'
+
+5. endpoint: 接口地址
+   - 格式: '/api/v1/{功能名}'
+   - 示例: '/api/v1/ocr'
+
+6. target_url: 目标服务器
+   - 格式: 'http://localhost:{端口}'
+   - 示例: 'http://localhost:8080'
+
+7. deleted: 逻辑删除
+   - 大部分为0（未删除）
+   - 少量为1（已删除），用于测试删除功能
+
+
+【JSON字段示例】
+--------------------------------------------------------------------------------
+1. api_info.request_params:
+   [{"name": "image", "type": "string", "required": true, "description": "图片URL"}]
+
+2. api_info.response_params:
+   [{"name": "text", "type": "string", "description": "识别结果"}]
+
+3. api_test_record.params:
+   {"image": "https://example.com/test.jpg"}
+
+4. api_test_record.result:
+   {"code": 200, "data": {"text": "识别结果"}, "message": "success"}
+
+
+================================================================================
+文档结束
+================================================================================

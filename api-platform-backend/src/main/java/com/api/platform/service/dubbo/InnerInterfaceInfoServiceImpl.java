@@ -112,6 +112,7 @@ public class InnerInterfaceInfoServiceImpl implements InnerInterfaceInfoService 
         vo.setMethod(apiInfo.getMethod());
         vo.setStatus(apiInfo.getStatus());
         vo.setTargetUrl(apiInfo.getTargetUrl());
+        vo.setCallLimit(apiInfo.getCallLimit());
         return vo;
     }
 
@@ -125,6 +126,7 @@ public class InnerInterfaceInfoServiceImpl implements InnerInterfaceInfoService 
         vo.setMethod(apiVO.getMethod());
         vo.setStatus(apiVO.getStatus());
         vo.setTargetUrl(apiVO.getTargetUrl());
+        vo.setCallLimit(apiVO.getCallLimit());
         return vo;
     }
 

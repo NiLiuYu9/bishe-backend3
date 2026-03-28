@@ -1,5 +1,6 @@
 package com.api.platform.controller;
 
+import com.api.platform.annotation.RateLimit;
 import com.api.platform.common.Result;
 import com.api.platform.dto.ApiCreateDTO;
 import com.api.platform.dto.ApiQueryDTO;
@@ -55,6 +56,7 @@ public class ApiController {
     }
 
     @PostMapping("/create")
+    @RateLimit(capacity = 10, refillRate = 1, message = "创建API请求过于频繁，请稍后再试")
     public Result<ApiVO> createApi(@Validated @RequestBody ApiCreateDTO createDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
         ApiVO apiVO = apiInfoService.createApi(userId, createDTO);
@@ -62,6 +64,7 @@ public class ApiController {
     }
 
     @PutMapping("/update/{id}")
+    @RateLimit(capacity = 20, refillRate = 2, message = "更新API请求过于频繁，请稍后再试")
     public Result<ApiVO> updateApi(@PathVariable Long id, @Validated @RequestBody ApiCreateDTO updateDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
         ApiVO apiVO = apiInfoService.updateApi(userId, id, updateDTO);
@@ -69,6 +72,7 @@ public class ApiController {
     }
 
     @PutMapping("/updateStatus/{id}")
+    @RateLimit(capacity = 10, refillRate = 1, message = "操作过于频繁，请稍后再试")
     public Result<Void> updateApiStatus(@PathVariable Long id, @Validated @RequestBody ApiStatusDTO statusDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
         apiInfoService.updateApiStatus(userId, id, statusDTO);

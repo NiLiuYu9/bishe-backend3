@@ -77,7 +77,7 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
     public IPage<OrderVO> pageOrderList(OrderQueryDTO queryDTO) {
         Page<OrderInfo> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
         LambdaQueryWrapper<OrderInfo> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(StrUtil.isNotBlank(queryDTO.getOrderNo()), OrderInfo::getOrderNo, queryDTO.getOrderNo())
+        queryWrapper.like(StrUtil.isNotBlank(queryDTO.getOrderNo()), OrderInfo::getOrderNo, queryDTO.getOrderNo())
                 .eq(StrUtil.isNotBlank(queryDTO.getStatus()), OrderInfo::getStatus, queryDTO.getStatus())
                 .eq(queryDTO.getBuyerId() != null, OrderInfo::getBuyerId, queryDTO.getBuyerId())
                 .orderByDesc(OrderInfo::getCreateTime);

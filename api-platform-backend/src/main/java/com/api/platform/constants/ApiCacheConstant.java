@@ -10,6 +10,8 @@ public class ApiCacheConstant {
     
     public static final String API_NULL_KEY = "api:null:";
     
+    public static final String RATE_LIMIT_KEY = "rate_limit:";
+    
     public static final long API_LIST_EXPIRE = 300;
     
     public static final long API_NULL_EXPIRE = 120;

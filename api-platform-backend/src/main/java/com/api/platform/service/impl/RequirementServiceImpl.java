@@ -2,6 +2,7 @@ package com.api.platform.service.impl;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.api.platform.constants.NotificationType;
 import com.api.platform.dto.ApiParamDTO;
 import com.api.platform.dto.RequirementApplyDTO;
 import com.api.platform.dto.RequirementApplicantSelectDTO;
@@ -15,6 +16,8 @@ import com.api.platform.exception.BusinessException;
 import com.api.platform.mapper.RequirementApplicantMapper;
 import com.api.platform.mapper.RequirementMapper;
 import com.api.platform.mapper.UserMapper;
+import com.api.platform.service.NotificationService;
+import com.api.platform.service.RequirementTagService;
 import com.api.platform.service.RequirementService;
 import com.api.platform.vo.ApplicantVO;
 import com.api.platform.vo.RequirementVO;
@@ -43,13 +46,21 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
     @Autowired
     private UserMapper userMapper;
 
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private RequirementTagService requirementTagService;
+
     @Override
-    public IPage<RequirementVO> pageList(RequirementQueryDTO queryDTO) {
+    public IPage<RequirementVO> pageList(RequirementQueryDTO queryDTO, Long currentUserId) {
         Page<Requirement> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
         LambdaQueryWrapper<Requirement> queryWrapper = buildQueryWrapper(queryDTO);
-        queryWrapper.notIn(Requirement::getStatus, "completed", "after_sale", "delivered");
+        if (StrUtil.isBlank(queryDTO.getStatus())) {
+            queryWrapper.eq(Requirement::getStatus, "open");
+        }
         IPage<Requirement> requirementPage = page(page, queryWrapper);
-        return convertToVOPage(requirementPage);
+        return convertToVOPage(requirementPage, currentUserId);
     }
 
     @Override
@@ -109,6 +120,9 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         requirement.setResponseParams(createDTO.getResponseParamsJson());
         requirement.setStatus("open");
         save(requirement);
+        if (createDTO.getTags() != null) {
+            requirementTagService.saveRequirementTags(requirement.getId(), createDTO.getTags());
+        }
         return convertToVO(requirement);
     }
 
@@ -135,6 +149,9 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         requirement.setRequestParams(updateDTO.getRequestParamsJson());
         requirement.setResponseParams(updateDTO.getResponseParamsJson());
         updateById(requirement);
+        if (updateDTO.getTags() != null) {
+            requirementTagService.saveRequirementTags(id, updateDTO.getTags());
+        }
         return convertToVO(requirement);
     }
 
@@ -212,6 +229,15 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
                 .set(RequirementApplicant::getStatus, "accepted"));
         requirement.setStatus("in_progress");
         updateById(requirement);
+        RequirementApplicant acceptedApplicant = applicantMapper.selectById(selectDTO.getApplicantId());
+        notificationService.sendNotification(
+            acceptedApplicant.getUserId(),
+            NotificationType.REQUIREMENT_STATUS_UPDATE.getCode(),
+            "需求状态更新",
+            "您已被选中处理需求：" + requirement.getTitle(),
+            requirementId,
+            "requirement"
+        );
     }
 
     @Override
@@ -301,6 +327,14 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         requirement.setDeliveryUrl(deliverDTO.getDeliveryUrl());
         requirement.setStatus("delivered");
         updateById(requirement);
+        notificationService.sendNotification(
+            requirement.getUserId(),
+            NotificationType.REQUIREMENT_STATUS_UPDATE.getCode(),
+            "需求已交付",
+            "需求「" + requirement.getTitle() + "」已交付，请确认",
+            requirementId,
+            "requirement"
+        );
     }
 
     @Override
@@ -318,6 +352,19 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         }
         requirement.setStatus("completed");
         updateById(requirement);
+        RequirementApplicant acceptedApplicant = applicantMapper.selectOne(new LambdaQueryWrapper<RequirementApplicant>()
+                .eq(RequirementApplicant::getRequirementId, requirementId)
+                .eq(RequirementApplicant::getStatus, "accepted"));
+        if (acceptedApplicant != null) {
+            notificationService.sendNotification(
+                acceptedApplicant.getUserId(),
+                NotificationType.REQUIREMENT_STATUS_UPDATE.getCode(),
+                "需求已确认完成",
+                "需求「" + requirement.getTitle() + "」已被确认完成",
+                requirementId,
+                "requirement"
+            );
+        }
     }
 
     @Override
@@ -411,7 +458,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         return queryWrapper;
     }
 
-    private IPage<RequirementVO> convertToVOPage(IPage<Requirement> requirementPage) {
+    private IPage<RequirementVO> convertToVOPage(IPage<Requirement> requirementPage, Long currentUserId) {
         List<Long> userIds = requirementPage.getRecords().stream()
                 .map(Requirement::getUserId)
                 .distinct()
@@ -423,16 +470,37 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
                     .collect(Collectors.toMap(User::getId, User::getUsername));
         }
         Map<Long, String> finalUsernameMap = usernameMap;
+        Map<Long, String> applyStatusMap = Collections.emptyMap();
+        if (currentUserId != null) {
+            List<Long> requirementIds = requirementPage.getRecords().stream()
+                    .map(Requirement::getId)
+                    .collect(Collectors.toList());
+            if (!requirementIds.isEmpty()) {
+                List<RequirementApplicant> applicants = applicantMapper.selectList(
+                        new LambdaQueryWrapper<RequirementApplicant>()
+                                .eq(RequirementApplicant::getUserId, currentUserId)
+                                .in(RequirementApplicant::getRequirementId, requirementIds)
+                );
+                applyStatusMap = applicants.stream()
+                        .collect(Collectors.toMap(RequirementApplicant::getRequirementId, RequirementApplicant::getStatus));
+            }
+        }
+        Map<Long, String> finalApplyStatusMap = applyStatusMap;
         IPage<RequirementVO> voPage = new Page<>(requirementPage.getCurrent(), requirementPage.getSize(), requirementPage.getTotal());
         List<RequirementVO> voList = requirementPage.getRecords().stream()
                 .map(requirement -> {
                     RequirementVO vo = convertToVO(requirement);
                     vo.setUsername(finalUsernameMap.get(requirement.getUserId()));
+                    vo.setMyApplyStatus(finalApplyStatusMap.get(requirement.getId()));
                     return vo;
                 })
                 .collect(Collectors.toList());
         voPage.setRecords(voList);
         return voPage;
+    }
+
+    private IPage<RequirementVO> convertToVOPage(IPage<Requirement> requirementPage) {
+        return convertToVOPage(requirementPage, null);
     }
 
     private RequirementVO convertToVO(Requirement requirement) {
@@ -444,6 +512,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         if (StrUtil.isNotBlank(requirement.getResponseParams())) {
             vo.setResponseParams(JSONUtil.toList(requirement.getResponseParams(), ApiParamDTO.class));
         }
+        vo.setTags(requirementTagService.getTagsByRequirementId(requirement.getId()));
         return vo;
     }
 
@@ -456,6 +525,22 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         }
         requirement.setStatus(status);
         updateById(requirement);
+        RequirementApplicant acceptedApplicant = applicantMapper.selectOne(new LambdaQueryWrapper<RequirementApplicant>()
+                .eq(RequirementApplicant::getRequirementId, id)
+                .eq(RequirementApplicant::getStatus, "accepted"));
+        java.util.List<Long> userIds = new java.util.ArrayList<>();
+        userIds.add(requirement.getUserId());
+        if (acceptedApplicant != null && !acceptedApplicant.getUserId().equals(requirement.getUserId())) {
+            userIds.add(acceptedApplicant.getUserId());
+        }
+        notificationService.sendNotificationBatch(
+            userIds,
+            NotificationType.REQUIREMENT_STATUS_UPDATE.getCode(),
+            "需求状态更新",
+            "需求「" + requirement.getTitle() + "」状态已变更为：" + status,
+            id,
+            "requirement"
+        );
     }
 
 }

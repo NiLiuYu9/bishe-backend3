@@ -12,7 +12,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 
 public interface RequirementService extends IService<Requirement> {
 
-    IPage<RequirementVO> pageList(RequirementQueryDTO queryDTO);
+    IPage<RequirementVO> pageList(RequirementQueryDTO queryDTO, Long currentUserId);
 
     RequirementVO getDetailById(Long id);
 

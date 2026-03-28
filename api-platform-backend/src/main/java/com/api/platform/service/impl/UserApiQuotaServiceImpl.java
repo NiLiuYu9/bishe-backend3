@@ -50,16 +50,14 @@ public class UserApiQuotaServiceImpl extends ServiceImpl<UserApiQuotaMapper, Use
 
     @Override
     public boolean deductQuota(Long userId, Long apiId) {
-        UserApiQuota quota = getQuota(userId, apiId);
-        if (quota == null) {
-            throw new BusinessException(ResultCode.FORBIDDEN, "无API调用配额");
-        }
-        if (quota.getRemainingCount() <= 0) {
+        int updated = this.baseMapper.deductQuota(userId, apiId);
+        if (updated == 0) {
+            UserApiQuota quota = getQuota(userId, apiId);
+            if (quota == null) {
+                throw new BusinessException(ResultCode.FORBIDDEN, "无API调用配额");
+            }
             throw new BusinessException(ResultCode.FORBIDDEN, "API调用配额已用尽");
         }
-        quota.setUsedCount(quota.getUsedCount() + 1);
-        quota.setRemainingCount(quota.getRemainingCount() - 1);
-        updateById(quota);
         return true;
     }
 

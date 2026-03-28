@@ -1,5 +1,6 @@
 package com.api.platform.service.impl;
 
+import com.api.platform.constants.NotificationType;
 import com.api.platform.entity.AfterSaleMessage;
 import com.api.platform.entity.RequirementAfterSale;
 import com.api.platform.entity.User;
@@ -8,12 +9,14 @@ import com.api.platform.mapper.AfterSaleMessageMapper;
 import com.api.platform.mapper.RequirementAfterSaleMapper;
 import com.api.platform.mapper.UserMapper;
 import com.api.platform.service.AfterSaleMessageService;
+import com.api.platform.service.NotificationService;
 import com.api.platform.vo.AfterSaleMessageVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
@@ -28,6 +31,9 @@ public class AfterSaleMessageServiceImpl extends ServiceImpl<AfterSaleMessageMap
 
     @Autowired
     private RequirementAfterSaleMapper afterSaleMapper;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Override
     public List<AfterSaleMessage> getMessagesByAfterSaleId(Long afterSaleId) {
@@ -58,6 +64,7 @@ public class AfterSaleMessageServiceImpl extends ServiceImpl<AfterSaleMessageMap
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public AfterSaleMessage sendMessage(Long afterSaleId, Long senderId, String senderType, String content) {
         AfterSaleMessage message = new AfterSaleMessage();
         message.setAfterSaleId(afterSaleId);
@@ -110,6 +117,26 @@ public class AfterSaleMessageServiceImpl extends ServiceImpl<AfterSaleMessageMap
         }
         
         AfterSaleMessage message = sendMessage(afterSaleId, userId, senderType, content);
+        if (!userId.equals(afterSale.getApplicantId())) {
+            notificationService.sendNotification(
+                afterSale.getApplicantId(),
+                NotificationType.AFTER_SALE_NEW_MESSAGE.getCode(),
+                "售后新消息",
+                "您的售后申请有新消息",
+                afterSaleId,
+                "after_sale"
+            );
+        }
+        if (!userId.equals(afterSale.getDeveloperId())) {
+            notificationService.sendNotification(
+                afterSale.getDeveloperId(),
+                NotificationType.AFTER_SALE_NEW_MESSAGE.getCode(),
+                "售后新消息",
+                "您收到的售后申请有新消息",
+                afterSaleId,
+                "after_sale"
+            );
+        }
         return convertToVO(message);
     }
 

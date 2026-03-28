@@ -1,6 +1,7 @@
 package com.api.platform.service.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.api.platform.constants.NotificationType;
 import com.api.platform.dto.AfterSaleCreateDTO;
 import com.api.platform.dto.AfterSaleDecideDTO;
 import com.api.platform.dto.AfterSaleQueryDTO;
@@ -14,6 +15,7 @@ import com.api.platform.mapper.RequirementAfterSaleMapper;
 import com.api.platform.mapper.RequirementApplicantMapper;
 import com.api.platform.mapper.RequirementMapper;
 import com.api.platform.mapper.UserMapper;
+import com.api.platform.service.NotificationService;
 import com.api.platform.service.RequirementAfterSaleService;
 import com.api.platform.service.RequirementService;
 import com.api.platform.vo.RequirementAfterSaleVO;
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +50,9 @@ public class RequirementAfterSaleServiceImpl extends ServiceImpl<RequirementAfte
 
     @Autowired
     private RequirementService requirementService;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -99,6 +105,14 @@ public class RequirementAfterSaleServiceImpl extends ServiceImpl<RequirementAfte
         afterSale.setDeveloperResponse(respondDTO.getDeveloperResponse());
         afterSale.setDeveloperResponseTime(LocalDateTime.now());
         updateById(afterSale);
+        notificationService.sendNotification(
+            afterSale.getApplicantId(),
+            NotificationType.AFTER_SALE_STATUS_UPDATE.getCode(),
+            "售后申请已回应",
+            "您的售后申请已得到开发者回应",
+            afterSaleId,
+            "after_sale"
+        );
     }
 
     @Override
@@ -137,6 +151,15 @@ public class RequirementAfterSaleServiceImpl extends ServiceImpl<RequirementAfte
         afterSale.setAdminDecisionTime(LocalDateTime.now());
         afterSale.setStatus(decision);
         updateById(afterSale);
+        List<Long> userIds = Arrays.asList(afterSale.getApplicantId(), afterSale.getDeveloperId());
+        notificationService.sendNotificationBatch(
+            userIds,
+            NotificationType.AFTER_SALE_STATUS_UPDATE.getCode(),
+            "售后申请已裁定",
+            "售后申请已由管理员裁定：" + ("resolved".equals(decision) ? "已解决" : "已驳回"),
+            afterSaleId,
+            "after_sale"
+        );
     }
 
     @Override
@@ -144,6 +167,18 @@ public class RequirementAfterSaleServiceImpl extends ServiceImpl<RequirementAfte
         RequirementAfterSale afterSale = getById(afterSaleId);
         if (afterSale == null) {
             return null;
+        }
+        return convertToVO(afterSale);
+    }
+
+    @Override
+    public RequirementAfterSaleVO getDetailByIdWithPermission(Long afterSaleId, Long userId, boolean isAdmin) {
+        RequirementAfterSale afterSale = getById(afterSaleId);
+        if (afterSale == null) {
+            return null;
+        }
+        if (!isAdmin && !afterSale.getApplicantId().equals(userId) && !afterSale.getDeveloperId().equals(userId)) {
+            throw new BusinessException("无权限查看该售后申请详情");
         }
         return convertToVO(afterSale);
     }

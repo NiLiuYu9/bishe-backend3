@@ -6,6 +6,7 @@ import lombok.Data;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @TableName("requirement")
@@ -55,5 +56,8 @@ public class Requirement implements Serializable {
 
     @TableField(exist = false)
     private String username;
+
+    @TableField(exist = false)
+    private List<String> tags;
 
 }

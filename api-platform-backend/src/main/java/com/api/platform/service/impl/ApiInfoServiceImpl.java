@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -155,6 +156,7 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         
         String oldEndpoint = oldApiInfo.getEndpoint();
         String oldMethod = oldApiInfo.getMethod();
+        Integer oldCallLimit = oldApiInfo.getCallLimit();
         
         copyCreateDtoToEntity(updateDTO, oldApiInfo);
         oldApiInfo.setStatus("pending");
@@ -166,7 +168,13 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         
         apiCacheService.cacheApiDetail(apiId, apiVO);
         
-        if (!oldEndpoint.equals(oldApiInfo.getEndpoint()) || !oldMethod.equals(oldApiInfo.getMethod())) {
+        Integer newCallLimit = oldApiInfo.getCallLimit();
+        if (oldCallLimit == null && newCallLimit != null || 
+            oldCallLimit != null && !oldCallLimit.equals(newCallLimit)) {
+            apiCacheService.clearRateLimitCache(apiId);
+        }
+        
+        if (!Objects.equals(oldEndpoint, oldApiInfo.getEndpoint()) || !Objects.equals(oldMethod, oldApiInfo.getMethod())) {
             apiCacheService.deletePathMapping(oldEndpoint, oldMethod);
         }
         apiCacheService.cachePathMapping(oldApiInfo.getEndpoint(), oldApiInfo.getMethod(), apiId);
@@ -295,17 +303,20 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
     private void applySorting(LambdaQueryWrapper<ApiInfo> queryWrapper, ApiQueryDTO queryDTO) {
         if (StrUtil.isNotBlank(queryDTO.getSortBy())) {
             String sortBy = queryDTO.getSortBy();
-            String sortOrder = StrUtil.isBlank(queryDTO.getSortOrder()) ? "asc" : queryDTO.getSortOrder();
-            boolean isAsc = "asc".equalsIgnoreCase(sortOrder);
+            String sortOrder = queryDTO.getSortOrder();
+            boolean isAsc;
             
             switch (sortBy) {
                 case "price":
+                    isAsc = StrUtil.isBlank(sortOrder) || "asc".equalsIgnoreCase(sortOrder);
                     queryWrapper.orderBy(true, isAsc, ApiInfo::getPrice);
                     break;
                 case "rating":
+                    isAsc = StrUtil.isBlank(sortOrder) || "asc".equalsIgnoreCase(sortOrder);
                     queryWrapper.orderBy(true, isAsc, ApiInfo::getRating);
                     break;
                 case "invokeCount":
+                    isAsc = !StrUtil.isBlank(sortOrder) && "asc".equalsIgnoreCase(sortOrder);
                     queryWrapper.orderBy(true, isAsc, ApiInfo::getInvokeCount);
                     break;
                 default:
@@ -348,6 +359,9 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         entity.setTargetUrl(dto.getTargetUrl());
         entity.setMethod(dto.getMethod());
         entity.setPrice(dto.getPrice());
+        entity.setPriceUnit(dto.getPriceUnit());
+        entity.setCallLimit(dto.getCallLimit());
+        entity.setDocUrl(dto.getDocUrl());
         entity.setRequestParams(dto.getRequestParamsJson());
         entity.setResponseParams(dto.getResponseParamsJson());
     }
@@ -360,6 +374,14 @@ public class ApiInfoServiceImpl extends ServiceImpl<ApiInfoMapper, ApiInfo> impl
         } else if ("offline".equals(currentStatus)) {
             if (!"pending".equals(newStatus)) {
                 throw new BusinessException("已下架API只能重新提交审核");
+            }
+        } else if ("rejected".equals(currentStatus)) {
+            if (!"pending".equals(newStatus)) {
+                throw new BusinessException("已拒绝API只能重新提交审核");
+            }
+        } else if ("pending".equals(currentStatus)) {
+            if (!"offline".equals(newStatus)) {
+                throw new BusinessException("待审核中的API只能下架");
             }
         } else {
             throw new BusinessException("当前状态不允许此操作");

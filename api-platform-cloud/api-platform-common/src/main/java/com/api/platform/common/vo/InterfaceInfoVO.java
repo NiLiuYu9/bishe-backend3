@@ -18,4 +18,6 @@ public class InterfaceInfoVO implements Serializable {
     private String status;
 
     private String targetUrl;
+
+    private Integer callLimit;
 }

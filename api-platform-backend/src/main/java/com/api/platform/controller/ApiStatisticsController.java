@@ -2,11 +2,14 @@ package com.api.platform.controller;
 
 import com.api.platform.common.Result;
 import com.api.platform.dto.StatisticsQueryDTO;
+import com.api.platform.exception.BusinessException;
 import com.api.platform.service.ApiInvokeService;
+import com.api.platform.utils.SessionUtils;
 import com.api.platform.vo.ApiStatisticsVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpSession;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
@@ -26,10 +29,18 @@ public class ApiStatisticsController {
             @RequestParam(required = false) String endDate) {
         StatisticsQueryDTO queryDTO = new StatisticsQueryDTO();
         if (startDate != null && !startDate.isEmpty()) {
-            queryDTO.setStartDate(LocalDate.parse(startDate, DATE_FORMATTER));
+            try {
+                queryDTO.setStartDate(LocalDate.parse(startDate, DATE_FORMATTER));
+            } catch (Exception e) {
+                throw new BusinessException(400, "日期格式不正确，请使用yyyy-MM-dd格式");
+            }
         }
         if (endDate != null && !endDate.isEmpty()) {
-            queryDTO.setEndDate(LocalDate.parse(endDate, DATE_FORMATTER));
+            try {
+                queryDTO.setEndDate(LocalDate.parse(endDate, DATE_FORMATTER));
+            } catch (Exception e) {
+                throw new BusinessException(400, "日期格式不正确，请使用yyyy-MM-dd格式");
+            }
         }
         ApiStatisticsVO vo = apiInvokeService.getApiStatistics(apiId, queryDTO);
         return Result.success(vo);
@@ -37,20 +48,29 @@ public class ApiStatisticsController {
 
     @GetMapping("/my-invoke")
     public Result<ApiStatisticsVO> getMyInvokeStatistics(
-            @RequestParam Long userId,
+            HttpSession session,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
             @RequestParam(required = false) String apiName,
             @RequestParam(required = false) Long typeId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String timeRange) {
+        Long userId = SessionUtils.getCurrentUserId(session);
         StatisticsQueryDTO queryDTO = new StatisticsQueryDTO();
         queryDTO.setUserId(userId);
         if (startDate != null && !startDate.isEmpty()) {
-            queryDTO.setStartDate(LocalDate.parse(startDate, DATE_FORMATTER));
+            try {
+                queryDTO.setStartDate(LocalDate.parse(startDate, DATE_FORMATTER));
+            } catch (Exception e) {
+                throw new BusinessException(400, "日期格式不正确，请使用yyyy-MM-dd格式");
+            }
         }
         if (endDate != null && !endDate.isEmpty()) {
-            queryDTO.setEndDate(LocalDate.parse(endDate, DATE_FORMATTER));
+            try {
+                queryDTO.setEndDate(LocalDate.parse(endDate, DATE_FORMATTER));
+            } catch (Exception e) {
+                throw new BusinessException(400, "日期格式不正确，请使用yyyy-MM-dd格式");
+            }
         }
         queryDTO.setApiName(apiName);
         queryDTO.setTypeId(typeId);
@@ -62,20 +82,29 @@ public class ApiStatisticsController {
 
     @GetMapping("/my-api-invoke")
     public Result<ApiStatisticsVO> getMyApiInvokeStatistics(
-            @RequestParam Long userId,
+            HttpSession session,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
             @RequestParam(required = false) String apiName,
             @RequestParam(required = false) Long typeId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String timeRange) {
+        Long userId = SessionUtils.getCurrentUserId(session);
         StatisticsQueryDTO queryDTO = new StatisticsQueryDTO();
         queryDTO.setUserId(userId);
         if (startDate != null && !startDate.isEmpty()) {
-            queryDTO.setStartDate(LocalDate.parse(startDate, DATE_FORMATTER));
+            try {
+                queryDTO.setStartDate(LocalDate.parse(startDate, DATE_FORMATTER));
+            } catch (Exception e) {
+                throw new BusinessException(400, "日期格式不正确，请使用yyyy-MM-dd格式");
+            }
         }
         if (endDate != null && !endDate.isEmpty()) {
-            queryDTO.setEndDate(LocalDate.parse(endDate, DATE_FORMATTER));
+            try {
+                queryDTO.setEndDate(LocalDate.parse(endDate, DATE_FORMATTER));
+            } catch (Exception e) {
+                throw new BusinessException(400, "日期格式不正确，请使用yyyy-MM-dd格式");
+            }
         }
         queryDTO.setApiName(apiName);
         queryDTO.setTypeId(typeId);

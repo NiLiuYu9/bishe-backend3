@@ -65,6 +65,10 @@ public class InterfaceValidateFilter implements GlobalFilter, Ordered {
             exchange.getAttributes().put("targetUrl", interfaceInfo.getTargetUrl());
         }
 
+        if (interfaceInfo.getCallLimit() != null && interfaceInfo.getCallLimit() > 0) {
+            exchange.getAttributes().put("callLimit", interfaceInfo.getCallLimit());
+        }
+
         return chain.filter(exchange);
     }
 

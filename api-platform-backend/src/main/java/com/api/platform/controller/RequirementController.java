@@ -25,8 +25,9 @@ public class RequirementController {
     private RequirementService requirementService;
 
     @GetMapping("/list")
-    public Result<PageResultVO<RequirementVO>> getList(RequirementQueryDTO queryDTO) {
-        IPage<RequirementVO> page = requirementService.pageList(queryDTO);
+    public Result<PageResultVO<RequirementVO>> getList(RequirementQueryDTO queryDTO, HttpSession session) {
+        Long currentUserId = SessionUtils.getCurrentUserIdOrNull(session);
+        IPage<RequirementVO> page = requirementService.pageList(queryDTO, currentUserId);
         return Result.success(PageResultVO.of(page.getRecords(), page.getTotal()));
     }
 

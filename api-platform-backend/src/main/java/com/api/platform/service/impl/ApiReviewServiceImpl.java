@@ -1,6 +1,7 @@
 package com.api.platform.service.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.api.platform.constants.NotificationType;
 import com.api.platform.constants.ReviewConstants;
 import com.api.platform.dto.ApiReviewCreateDTO;
 import com.api.platform.dto.ApiReviewPublisherReplyDTO;
@@ -17,6 +18,7 @@ import com.api.platform.mapper.ApiReviewMapper;
 import com.api.platform.mapper.OrderInfoMapper;
 import com.api.platform.mapper.UserMapper;
 import com.api.platform.service.ApiReviewService;
+import com.api.platform.service.NotificationService;
 import com.api.platform.vo.ApiReviewVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -47,6 +49,9 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
     @Autowired
     private UserMapper userMapper;
 
+    @Autowired
+    private NotificationService notificationService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ApiReviewVO createReview(Long userId, ApiReviewCreateDTO createDTO) {
@@ -76,6 +81,17 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
         order.setRating(createDTO.getRating());
         orderInfoMapper.updateById(order);
         updateApiAverageRating(order.getApiId());
+        ApiInfo apiInfo = apiInfoMapper.selectById(order.getApiId());
+        if (apiInfo != null && !apiInfo.getUserId().equals(userId)) {
+            notificationService.sendNotification(
+                apiInfo.getUserId(),
+                NotificationType.API_NEW_REVIEW.getCode(),
+                "收到新评价",
+                "您的API「" + apiInfo.getName() + "」收到了新评价",
+                review.getId(),
+                "api_review"
+            );
+        }
         return convertToVO(review);
     }
 
@@ -105,6 +121,17 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
         userReply.setParentId(originalReview.getId());
         userReply.setReplyType(ReviewConstants.REVIEW_TYPE_USER_REPLY);
         save(userReply);
+        ApiInfo apiInfo = apiInfoMapper.selectById(originalReview.getApiId());
+        if (apiInfo != null) {
+            notificationService.sendNotification(
+                apiInfo.getUserId(),
+                NotificationType.API_REVIEW_REPLY.getCode(),
+                "评价有新追评",
+                "您的API「" + apiInfo.getName() + "」的评价有新追评",
+                userReply.getId(),
+                "api_review"
+            );
+        }
     }
 
     @Override
@@ -130,6 +157,14 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
         publisherReply.setParentId(replyDTO.getReviewId());
         publisherReply.setReplyType(ReviewConstants.REVIEW_TYPE_PUBLISHER_REPLY);
         save(publisherReply);
+        notificationService.sendNotification(
+            originalReview.getUserId(),
+            NotificationType.API_REVIEW_REPLY.getCode(),
+            "评价已回复",
+            "您的评价已得到开发者回复",
+            publisherReply.getId(),
+            "api_review"
+        );
     }
 
     @Override
@@ -143,7 +178,6 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
             throw new BusinessException("无权限修改该评论");
         }
         review.setContent(updateDTO.getContent());
-        review.setCreateTime(LocalDateTime.now());
         updateById(review);
     }
 

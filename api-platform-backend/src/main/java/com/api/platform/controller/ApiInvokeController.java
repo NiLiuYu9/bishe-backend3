@@ -11,6 +11,7 @@ import com.api.platform.entity.User;
 import com.api.platform.entity.UserApiQuota;
 import com.api.platform.exception.BusinessException;
 import com.api.platform.mapper.ApiInfoMapper;
+import com.api.platform.ratelimit.RateLimiter;
 import com.api.platform.service.AccessKeyService;
 import com.api.platform.service.ApiCacheService;
 import com.api.platform.service.ApiWhitelistService;
@@ -59,6 +60,11 @@ public class ApiInvokeController {
     @Autowired
     private ApiWhitelistService apiWhitelistService;
 
+    @Autowired
+    private RateLimiter rateLimiter;
+
+    private static final int DEFAULT_CALL_LIMIT = 100;
+
     @PostMapping("/call")
     public Result<ApiInvokeResultVO> invokeApi(@RequestBody ApiInvokeDTO invokeDTO) {
         if (invokeDTO.getApiId() == null) {
@@ -82,6 +88,15 @@ public class ApiInvokeController {
                 throw new BusinessException(403, "您不在该API的白名单中，无法调用");
             }
         }
+
+        int callLimit = apiInfo.getCallLimit() != null && apiInfo.getCallLimit() > 0 
+                ? apiInfo.getCallLimit() : DEFAULT_CALL_LIMIT;
+        String rateLimitKey = "invoke:" + user.getId() + ":" + apiInfo.getId();
+        
+        if (!rateLimiter.tryAcquire(rateLimitKey, callLimit, callLimit)) {
+            throw new BusinessException(429, "已达到API调用频率限制(" + callLimit + "次/分钟)，请稍后再试");
+        }
+
         userApiQuotaService.deductQuota(user.getId(), invokeDTO.getApiId());
 
         ApiInvokeResultVO vo = new ApiInvokeResultVO();

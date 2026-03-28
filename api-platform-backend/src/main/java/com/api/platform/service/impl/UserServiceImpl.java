@@ -20,6 +20,7 @@ import com.api.platform.exception.BusinessException;
 import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.mapper.UserMapper;
 import com.api.platform.service.ApiCacheService;
+import com.api.platform.service.UserTagService;
 import com.api.platform.service.UserService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -43,6 +44,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Autowired
     private ApiCacheService apiCacheService;
+
+    @Autowired
+    private UserTagService userTagService;
 
     @Override
     public void register(RegisterDTO registerDTO) {
@@ -129,6 +133,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         userVO.setIsAdmin(user.getIsAdmin());
         userVO.setStatus(user.getStatus());
         userVO.setCreateTime(user.getCreateTime());
+        userVO.setTags(userTagService.getTagsByUserId(user.getId()));
         return userVO;
     }
 

@@ -19,6 +19,8 @@ public interface RequirementAfterSaleService extends IService<RequirementAfterSa
 
     RequirementAfterSaleVO getDetailById(Long afterSaleId);
 
+    RequirementAfterSaleVO getDetailByIdWithPermission(Long afterSaleId, Long userId, boolean isAdmin);
+
     IPage<RequirementAfterSaleVO> pageList(AfterSaleQueryDTO queryDTO);
 
     IPage<RequirementAfterSaleVO> getMyAfterSales(Long userId, AfterSaleQueryDTO queryDTO);

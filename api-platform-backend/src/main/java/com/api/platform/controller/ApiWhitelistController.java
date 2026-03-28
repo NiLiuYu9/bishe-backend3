@@ -2,8 +2,11 @@ package com.api.platform.controller;
 
 import com.api.platform.common.Result;
 import com.api.platform.dto.WhitelistAddDTO;
+import com.api.platform.entity.ApiInfo;
 import com.api.platform.entity.ApiWhitelist;
 import com.api.platform.entity.User;
+import com.api.platform.exception.BusinessException;
+import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.mapper.UserMapper;
 import com.api.platform.service.ApiWhitelistService;
 import com.api.platform.utils.SessionUtils;
@@ -31,6 +34,9 @@ public class ApiWhitelistController {
     @Autowired
     private UserMapper userMapper;
 
+    @Autowired
+    private ApiInfoMapper apiInfoMapper;
+
     @PostMapping("/add/{apiId}")
     public Result<Void> addWhitelist(@PathVariable Long apiId, 
                                      @Validated @RequestBody WhitelistAddDTO addDTO, 
@@ -53,7 +59,17 @@ public class ApiWhitelistController {
     public Result<PageResultVO<WhitelistUserVO>> getWhitelistList(
             @PathVariable Long apiId,
             @RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "10") int pageSize) {
+            @RequestParam(defaultValue = "10") int pageSize,
+            HttpSession session) {
+        Long userId = SessionUtils.getCurrentUserId(session);
+        boolean isAdmin = SessionUtils.isAdmin(session);
+        ApiInfo apiInfo = apiInfoMapper.selectById(apiId);
+        if (apiInfo == null) {
+            throw new BusinessException("API不存在");
+        }
+        if (!isAdmin && !apiInfo.getUserId().equals(userId)) {
+            throw new BusinessException("无权限查看该API的白名单");
+        }
         IPage<ApiWhitelist> page = whitelistService.getWhitelistPage(apiId, pageNum, pageSize);
         List<ApiWhitelist> records = page.getRecords();
         

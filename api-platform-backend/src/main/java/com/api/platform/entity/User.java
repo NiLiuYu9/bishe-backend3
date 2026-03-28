@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @TableName("sys_user")
@@ -51,5 +52,8 @@ public class User implements Serializable {
     @TableLogic
     @TableField("deleted")
     private Integer deleted;
+
+    @TableField(exist = false)
+    private List<String> tags;
 
 }

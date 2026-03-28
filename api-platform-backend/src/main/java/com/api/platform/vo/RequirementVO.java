@@ -45,4 +45,8 @@ public class RequirementVO implements Serializable {
 
     private String deliveryUrl;
 
+    private List<String> tags;
+
+    private Double matchScore;
+
 }

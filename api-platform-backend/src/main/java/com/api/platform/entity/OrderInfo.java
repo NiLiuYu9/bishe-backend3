@@ -40,6 +40,12 @@ public class OrderInfo implements Serializable {
     @TableField("status")
     private String status;
 
+    @TableField("pay_trade_no")
+    private String payTradeNo;
+
+    @TableField("pay_method")
+    private String payMethod;
+
     @TableField("rating")
     private BigDecimal rating;
 
