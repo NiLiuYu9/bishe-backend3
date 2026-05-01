@@ -19,6 +19,11 @@ import org.springframework.stereotype.Service;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * API收藏服务实现 —— 处理用户对API的收藏/取消收藏/查询收藏列表
+ *
+ * 收藏记录中 userId + apiId 为联合唯一约束，同一用户不能重复收藏同一API
+ */
 @Service
 public class ApiFavoriteServiceImpl extends ServiceImpl<ApiFavoriteMapper, ApiFavorite> implements ApiFavoriteService {
 

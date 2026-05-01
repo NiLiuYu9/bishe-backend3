@@ -12,10 +12,12 @@ import com.api.platform.entity.ApiInfo;
 import com.api.platform.entity.ApiTestRecord;
 import com.api.platform.entity.User;
 import com.api.platform.exception.BusinessException;
+import com.api.platform.ratelimit.RateLimiter;
 import com.api.platform.mapper.ApiInfoMapper;
 import com.api.platform.service.AccessKeyService;
 import com.api.platform.service.ApiCacheService;
 import com.api.platform.service.ApiTestRecordService;
+import com.api.platform.service.ApiWhitelistService;
 import com.api.platform.service.UserApiQuotaService;
 import com.api.platform.utils.SessionUtils;
 import com.api.platform.utils.VoConverterUtils;
@@ -40,6 +42,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * API测试控制器 —— 处理API在线测试调用及测试记录管理请求
+ *
+ * 路由前缀：/test
+ * 所有接口返回统一格式 Result&lt;T&gt;，由 GlobalExceptionHandler 统一处理异常
+ *
+ * 与 ApiInvokeController 的区别：
+ * - TestController 基于Session鉴权，用于前端在线测试页面
+ * - ApiInvokeController 基于AK/SK鉴权，用于SDK/程序化调用
+ * - TestController 有每日调用次数限制（5次/API/用户/天）和记录数量限制（5条/API/用户）
+ */
 @Slf4j
 @RestController
 @RequestMapping("/test")
@@ -47,6 +60,8 @@ public class TestController {
 
     private static final int MAX_RECORDS_PER_USER_API = 5;
     private static final int MAX_DAILY_CALLS_PER_USER_API = 5;
+    private static final int RATE_LIMIT_CAPACITY = 2;
+    private static final int RATE_LIMIT_REFILL_RATE = 2;
 
     @Autowired
     private AccessKeyService accessKeyService;
@@ -72,6 +87,27 @@ public class TestController {
     @Autowired
     private ApiCacheService apiCacheService;
 
+    @Autowired
+    private ApiWhitelistService apiWhitelistService;
+
+    @Autowired
+    private RateLimiter rateLimiter;
+
+    /**
+     * 在线测试调用API
+     *
+     * 业务流程：
+     * 1. 通过Session获取当前用户，若用户无AK/SK则自动生成
+     * 2. 从缓存获取API信息，校验审核状态
+     * 3. 检查每日测试调用次数限制（5次/API/用户/天）
+     * 4. 扣减用户配额
+     * 5. 使用SHA256签名通过网关或直连调用目标API
+     * 6. 自动保存测试记录
+     *
+     * @param dto     测试调用请求（apiId、请求参数）
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;ApiInvokeResultVO&gt; 调用结果（成功/失败、响应数据、耗时、状态码）
+     */
     @PostMapping("/call")
     public Result<ApiInvokeResultVO> testCall(@RequestBody TestCallDTO dto, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -101,6 +137,20 @@ public class TestController {
         }
         if (!"approved".equals(apiVO.getStatus())) {
             throw new BusinessException(403, "API未审核通过或已下架");
+        }
+
+        // 白名单校验
+        ApiInfo apiInfoForWhitelist = apiInfoMapper.selectById(dto.getApiId());
+        if (apiInfoForWhitelist != null && apiInfoForWhitelist.getWhitelistEnabled() != null
+                && apiInfoForWhitelist.getWhitelistEnabled() == 1) {
+            if (!apiWhitelistService.isInWhitelist(dto.getApiId(), userId)) {
+                throw new BusinessException(403, "您不在该API的白名单中，无法调用");
+            }
+        }
+
+        String rateLimitKey = "test:" + userId + ":" + dto.getApiId();
+        if (!rateLimiter.tryAcquire(rateLimitKey, RATE_LIMIT_CAPACITY, RATE_LIMIT_REFILL_RATE)) {
+            throw new BusinessException(429, "测试调用频率超限(每秒最多2次)，请稍后再试");
         }
 
         int todayCallCount = apiTestRecordService.countTodayCallsByUserIdAndApiId(userId, dto.getApiId());
@@ -179,20 +229,28 @@ public class TestController {
         headers.set("body", body);
         
         try {
-            if (params != null && !params.isEmpty()) {
-                StringBuilder urlBuilder = new StringBuilder(url);
-                urlBuilder.append("?");
-                params.forEach((key, value) -> {
-                    if (value != null) {
-                        urlBuilder.append(key).append("=").append(value).append("&");
-                    }
-                });
-                url = urlBuilder.substring(0, urlBuilder.length() - 1);
+            HttpMethod httpMethod = HttpMethod.valueOf(apiVO.getMethod().toUpperCase());
+
+            HttpEntity<String> entity;
+            if (httpMethod == HttpMethod.GET) {
+                if (params != null && !params.isEmpty()) {
+                    StringBuilder urlBuilder = new StringBuilder(url);
+                    urlBuilder.append("?");
+                    params.forEach((key, value) -> {
+                        if (value != null) {
+                            urlBuilder.append(key).append("=").append(value).append("&");
+                        }
+                    });
+                    url = urlBuilder.substring(0, urlBuilder.length() - 1);
+                }
+                entity = new HttpEntity<>(headers);
+            } else {
+                headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+                entity = new HttpEntity<>(body, headers);
             }
 
-            HttpEntity<String> entity = new HttpEntity<>(headers);
-            log.info("请求URL: {}", url);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+            log.info("请求URL: {}, 方法: {}", url, httpMethod);
+            ResponseEntity<String> response = restTemplate.exchange(url, httpMethod, entity, String.class);
 
             log.info("响应状态: {}, 响应体: {}", response.getStatusCode(), response.getBody());
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -220,6 +278,13 @@ public class TestController {
         private Map<String, Object> params;
     }
 
+    /**
+     * 获取用户对指定API的测试记录数量
+     *
+     * @param apiId   API ID
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Integer&gt; 测试记录数量
+     */
     @GetMapping("/records/count")
     public Result<Integer> getRecordCount(@RequestParam Long apiId, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -235,6 +300,15 @@ public class TestController {
         return Result.success(remaining);
     }
 
+    /**
+     * 手动保存测试记录
+     *
+     * 每个用户对每个API最多保存5条测试记录，超出需先删除
+     *
+     * @param dto     测试记录数据（apiId、apiName、参数、结果、成功与否、耗时、状态码）
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;TestRecordVO&gt; 保存成功的测试记录
+     */
     @PostMapping("/save-record")
     public Result<TestRecordVO> saveRecord(@RequestBody TestRecordDTO dto, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -272,6 +346,13 @@ public class TestController {
         return Result.success(null);
     }
 
+    /**
+     * 获取用户对指定API的所有测试记录
+     *
+     * @param apiId   API ID
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;List&lt;TestRecordVO&gt;&gt; 测试记录列表
+     */
     @GetMapping("/records")
     public Result<List<TestRecordVO>> getRecords(@RequestParam Long apiId, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -282,6 +363,13 @@ public class TestController {
         return Result.success(voList);
     }
 
+    /**
+     * 删除指定测试记录
+     *
+     * @param id      测试记录ID
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 删除成功无返回数据
+     */
     @DeleteMapping("/records/{id}")
     public Result<Void> deleteRecord(@PathVariable Long id, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);

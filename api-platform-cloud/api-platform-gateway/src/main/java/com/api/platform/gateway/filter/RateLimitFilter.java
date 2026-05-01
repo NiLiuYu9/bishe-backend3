@@ -2,13 +2,10 @@ package com.api.platform.gateway.filter;
 
 import cn.hutool.core.util.StrUtil;
 import com.api.platform.common.constant.AuthConstants;
-import com.api.platform.common.service.InnerUserService;
-import com.api.platform.common.vo.InvokeUserVO;
 import com.api.platform.gateway.ratelimit.RateLimiter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -26,18 +23,23 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Rate limit filter - 4th ring in gateway filter chain (Order=2)
+ *
+ * Responsibility: Token bucket rate limiting based on Redis + Lua script to prevent malicious high-frequency API calls
+ * Rate limit rule: Fixed capacity=2, refillRate=2 (max 2 requests per second per user per path)
+ * Returns 429 Too Many Requests when rate limit exceeded
+ * Returns 401 Unauthorized when user identity cannot be resolved
+ */
 @Slf4j
 @Component
 public class RateLimitFilter implements GlobalFilter, Ordered {
 
-    private static final int DEFAULT_CAPACITY = 100;
-    private static final int DEFAULT_REFILL_RATE = 10;
+    private static final int RATE_LIMIT_CAPACITY = 2;
+    private static final int RATE_LIMIT_REFILL_RATE = 2;
 
     @Autowired
     private RateLimiter rateLimiter;
-
-    @DubboReference
-    private InnerUserService innerUserService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -53,22 +55,15 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
 
         Long userId = resolveUserId(request);
         if (userId == null) {
-            return chain.filter(exchange);
+            return handleUnauthorized(exchange);
         }
 
-        Integer callLimit = exchange.getAttribute("callLimit");
-        int capacity = callLimit != null && callLimit > 0 ? callLimit : DEFAULT_CAPACITY;
-        int refillRate = capacity;
-
         String rateLimitKey = buildRateLimitKey(userId, path);
-        
-        boolean allowed = rateLimiter.tryAcquire(rateLimitKey, capacity, refillRate);
-        
+
+        boolean allowed = rateLimiter.tryAcquire(rateLimitKey, RATE_LIMIT_CAPACITY, RATE_LIMIT_REFILL_RATE);
+
         if (!allowed) {
-            String message = callLimit != null && callLimit > 0 
-                    ? "已达到API调用频率限制(" + callLimit + "次/分钟)，请稍后再试"
-                    : "请求过于频繁，请稍后再试";
-            return handleRateLimitExceeded(exchange, message);
+            return handleRateLimitExceeded(exchange);
         }
 
         return chain.filter(exchange);
@@ -80,18 +75,9 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
             try {
                 return Long.parseLong(userIdHeader);
             } catch (NumberFormatException e) {
-                log.warn("无效的userId header: {}", userIdHeader);
+                log.warn("Invalid userId header: {}", userIdHeader);
             }
         }
-
-        String accessKey = request.getHeaders().getFirst(AuthConstants.ACCESS_KEY_HEADER);
-        if (StrUtil.isNotBlank(accessKey)) {
-            InvokeUserVO user = innerUserService.getInvokeUser(accessKey);
-            if (user != null) {
-                return user.getId();
-            }
-        }
-
         return null;
     }
 
@@ -106,21 +92,42 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
                path.startsWith("/test/");
     }
 
-    private Mono<Void> handleRateLimitExceeded(ServerWebExchange exchange, String message) {
+    private Mono<Void> handleUnauthorized(ServerWebExchange exchange) {
         ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
+        response.setStatusCode(HttpStatus.UNAUTHORIZED);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("code", 429);
-        result.put("message", message);
+        result.put("code", 401);
+        result.put("message", "无法识别用户身份");
         result.put("data", null);
 
         String json;
         try {
             json = objectMapper.writeValueAsString(result);
         } catch (JsonProcessingException e) {
-            json = "{\"code\":429,\"message\":\"请求过于频繁，请稍后再试\",\"data\":null}";
+            json = "{\"code\":401,\"message\":\"无法识别用户身份\",\"data\":null}";
+        }
+
+        DataBuffer buffer = response.bufferFactory().wrap(json.getBytes(StandardCharsets.UTF_8));
+        return response.writeWith(Mono.just(buffer));
+    }
+
+    private Mono<Void> handleRateLimitExceeded(ServerWebExchange exchange) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", 429);
+        result.put("message", "API调用频率超限(每秒最多2次)，请稍后再试");
+        result.put("data", null);
+
+        String json;
+        try {
+            json = objectMapper.writeValueAsString(result);
+        } catch (JsonProcessingException e) {
+            json = "{\"code\":429,\"message\":\"API调用频率超限(每秒最多2次)，请稍后再试\",\"data\":null}";
         }
 
         DataBuffer buffer = response.bufferFactory().wrap(json.getBytes(StandardCharsets.UTF_8));

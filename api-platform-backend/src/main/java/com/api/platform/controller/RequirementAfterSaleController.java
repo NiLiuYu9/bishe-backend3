@@ -5,7 +5,6 @@ import com.api.platform.dto.AfterSaleCreateDTO;
 import com.api.platform.dto.AfterSaleDecideDTO;
 import com.api.platform.dto.AfterSaleMessageDTO;
 import com.api.platform.dto.AfterSaleQueryDTO;
-import com.api.platform.dto.AfterSaleRespondDTO;
 import com.api.platform.service.AfterSaleMessageService;
 import com.api.platform.service.RequirementAfterSaleService;
 import com.api.platform.utils.SessionUtils;
@@ -37,13 +36,6 @@ public class RequirementAfterSaleController {
         return Result.success(vo);
     }
 
-    @PostMapping("/respond/{id}")
-    public Result<Void> respond(@PathVariable Long id, @Validated @RequestBody AfterSaleRespondDTO respondDTO, HttpSession session) {
-        Long userId = SessionUtils.getCurrentUserId(session);
-        afterSaleService.respondAfterSale(userId, id, respondDTO);
-        return Result.success();
-    }
-
     @PostMapping("/decide/{id}")
     public Result<Void> decide(@PathVariable Long id, @Validated @RequestBody AfterSaleDecideDTO decideDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -54,6 +46,15 @@ public class RequirementAfterSaleController {
         return Result.success();
     }
 
+    /**
+     * 获取售后详情
+     *
+     * 需求方、开发者或管理员可查看，其他用户无权限
+     *
+     * @param id      售后ID
+     * @param session HttpSession，用于获取当前用户ID和管理员标识
+     * @return Result&lt;RequirementAfterSaleVO&gt; 售后详情
+     */
     @GetMapping("/detail/{id}")
     public Result<RequirementAfterSaleVO> getDetail(@PathVariable Long id, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -65,6 +66,15 @@ public class RequirementAfterSaleController {
         return Result.success(vo);
     }
 
+    /**
+     * 获取所有售后列表（管理员）
+     *
+     * 仅管理员可查看全平台售后列表
+     *
+     * @param queryDTO 查询条件（状态、分页参数）
+     * @param session  HttpSession，用于验证管理员权限
+     * @return Result&lt;PageResultVO&lt;RequirementAfterSaleVO&gt;&gt; 分页的售后列表
+     */
     @GetMapping("/list")
     public Result<PageResultVO<RequirementAfterSaleVO>> getList(AfterSaleQueryDTO queryDTO, HttpSession session) {
         if (!SessionUtils.isAdmin(session)) {
@@ -74,6 +84,13 @@ public class RequirementAfterSaleController {
         return Result.success(PageResultVO.of(page.getRecords(), page.getTotal()));
     }
 
+    /**
+     * 获取当前用户作为需求方的售后列表
+     *
+     * @param queryDTO 查询条件（状态、分页参数）
+     * @param session  HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;PageResultVO&lt;RequirementAfterSaleVO&gt;&gt; 分页的售后列表
+     */
     @GetMapping("/my-after-sales")
     public Result<PageResultVO<RequirementAfterSaleVO>> getMyAfterSales(AfterSaleQueryDTO queryDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -81,6 +98,13 @@ public class RequirementAfterSaleController {
         return Result.success(PageResultVO.of(page.getRecords(), page.getTotal()));
     }
 
+    /**
+     * 获取当前用户作为开发者的售后列表
+     *
+     * @param queryDTO 查询条件（状态、分页参数）
+     * @param session  HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;PageResultVO&lt;RequirementAfterSaleVO&gt;&gt; 分页的售后列表
+     */
     @GetMapping("/developer-after-sales")
     public Result<PageResultVO<RequirementAfterSaleVO>> getDeveloperAfterSales(AfterSaleQueryDTO queryDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -96,6 +120,17 @@ public class RequirementAfterSaleController {
         return Result.success(messages);
     }
 
+    /**
+     * 发送售后对话消息
+     *
+     * 需求方、开发者或管理员可在售后对话中发送消息，
+     * senderType 自动识别：0=需求方, 1=开发者, 2=管理员
+     *
+     * @param afterSaleId 售后ID
+     * @param messageDTO  消息表单（content 消息内容）
+     * @param session     HttpSession，用于获取当前用户ID和管理员标识
+     * @return Result&lt;AfterSaleMessageVO&gt; 发送成功的消息信息
+     */
     @PostMapping("/message/send/{afterSaleId}")
     public Result<AfterSaleMessageVO> sendMessage(@PathVariable Long afterSaleId, 
                                                 @Validated @RequestBody AfterSaleMessageDTO messageDTO, 

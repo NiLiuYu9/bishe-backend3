@@ -37,6 +37,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 评价服务实现 —— 处理API评价的创建、回复、删除及嵌套回复结构管理
+ *
+ * 评价类型（replyType）：
+ * - 0(ORIGINAL)：原始评价（买家对API的评价）
+ * - 1(PUBLISHER_REPLY)：上架者回复（API开发者对评价的回复）
+ * - 2(USER_REPLY)：用户追评（买家对上架者回复的追评）
+ *
+ * 回复嵌套结构：原始评价 → 上架者回复 → 用户追评
+ * 评价创建/删除时会自动更新API的平均评分
+ */
 @Service
 public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview> implements ApiReviewService {
 
@@ -52,6 +63,11 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
     @Autowired
     private NotificationService notificationService;
 
+    /**
+     * 创建评价（原始评价，replyType=0）
+     * 校验订单权限和状态，防止重复评价
+     * 创建后自动更新API平均评分，并通知API开发者
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ApiReviewVO createReview(Long userId, ApiReviewCreateDTO createDTO) {
@@ -76,11 +92,11 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
         review.setUserId(userId);
         review.setRating(createDTO.getRating());
         review.setContent(createDTO.getContent());
-        review.setReplyType(ReviewConstants.REVIEW_TYPE_ORIGINAL);
+        review.setReplyType(ReviewConstants.REVIEW_TYPE_ORIGINAL); // 原始评价
         save(review);
         order.setRating(createDTO.getRating());
         orderInfoMapper.updateById(order);
-        updateApiAverageRating(order.getApiId());
+        updateApiAverageRating(order.getApiId()); // 更新API平均评分
         ApiInfo apiInfo = apiInfoMapper.selectById(order.getApiId());
         if (apiInfo != null && !apiInfo.getUserId().equals(userId)) {
             notificationService.sendNotification(
@@ -88,13 +104,14 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
                 NotificationType.API_NEW_REVIEW.getCode(),
                 "收到新评价",
                 "您的API「" + apiInfo.getName() + "」收到了新评价",
-                review.getId(),
+                apiInfo.getId(),
                 "api_review"
             );
         }
         return convertToVO(review);
     }
 
+    /** 用户追评（replyType=2），只能回复上架者的回复 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void userReplyReview(Long userId, ApiReviewUserReplyDTO replyDTO) {
@@ -128,12 +145,13 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
                 NotificationType.API_REVIEW_REPLY.getCode(),
                 "评价有新追评",
                 "您的API「" + apiInfo.getName() + "」的评价有新追评",
-                userReply.getId(),
+                originalReview.getApiId(),
                 "api_review"
             );
         }
     }
 
+    /** 上架者回复评价（replyType=1），API开发者对原始评价的回复 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void publisherReplyReview(Long userId, ApiReviewPublisherReplyDTO replyDTO) {
@@ -162,11 +180,12 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
             NotificationType.API_REVIEW_REPLY.getCode(),
             "评价已回复",
             "您的评价已得到开发者回复",
-            publisherReply.getId(),
+            originalReview.getApiId(),
             "api_review"
         );
     }
 
+    /** 修改评价内容（仅评价者本人可修改） */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateReview(Long userId, ApiReviewUpdateDTO updateDTO) {
@@ -181,6 +200,7 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
         updateById(review);
     }
 
+    /** 删除评价（级联删除子回复，删除后更新API平均评分） */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteReview(Long userId, Long reviewId) {
@@ -192,11 +212,12 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
             throw new BusinessException("无权限删除该评论");
         }
         this.baseMapper.delete(new LambdaQueryWrapper<ApiReview>()
-                .eq(ApiReview::getParentId, reviewId));
+                .eq(ApiReview::getParentId, reviewId)); // 级联删除子回复
         removeById(reviewId);
-        updateApiAverageRating(review.getApiId());
+        updateApiAverageRating(review.getApiId()); // 删除后更新API平均评分
     }
 
+    /** 分页查询API评价（支持按replyType筛选，可选加载嵌套回复） */
     @Override
     public IPage<ApiReviewVO> getApiReviews(ApiReviewQueryDTO queryDTO) {
         Page<ApiReview> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
@@ -246,6 +267,7 @@ public class ApiReviewServiceImpl extends ServiceImpl<ApiReviewMapper, ApiReview
         return convertToVO(review);
     }
 
+    /** 计算API平均评分（仅统计原始评价，即replyType=0的记录） */
     private void updateApiAverageRating(Long apiId) {
         List<ApiReview> reviews = this.baseMapper.selectList(new LambdaQueryWrapper<ApiReview>()
                 .eq(ApiReview::getApiId, apiId)

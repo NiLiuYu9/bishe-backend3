@@ -1,5 +1,10 @@
 package com.api.platform.common.constant;
 
+/**
+ * 服务常量 —— 定义Dubbo服务相关的常量
+ *
+ * 包括Dubbo服务版本号、超时时间、重试次数等配置
+ */
 public class ServiceConstants {
 
     public static final String MAIN_SERVICE = "api-platform-backend";

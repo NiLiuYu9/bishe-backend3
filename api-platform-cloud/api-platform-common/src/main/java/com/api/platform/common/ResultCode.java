@@ -2,6 +2,9 @@ package com.api.platform.common;
 
 import lombok.Getter;
 
+/**
+ * 响应码枚举 —— 定义常用的业务状态码
+ */
 @Getter
 public enum ResultCode {
 

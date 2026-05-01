@@ -11,6 +11,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+/**
+ * 响应日志过滤器 —— 网关过滤器链第4环（Order=2）
+ *
+ * 职责：记录API调用的响应日志，并通过Dubbo更新调用次数统计
+ * 在请求完成后：
+ * 1. 记录响应状态码、耗时等信息
+ * 2. 通过Dubbo调用后端服务，更新接口调用次数（Redis+MySQL）
+ * 3. 更新用户调用配额的已使用次数
+ */
 @Slf4j
 @Component
 public class ResponseLogFilter implements GlobalFilter, Ordered {

@@ -13,7 +13,7 @@ import java.util.List;
 @Component
 public class RateLimiter {
 
-    private static final String RATE_LIMIT_KEY_PREFIX = "rate_limit:";
+    private static final String RATE_LIMIT_KEY_PREFIX = "gateway_rate_limit:";
 
     private static final String LUA_SCRIPT =
             "local key = KEYS[1]\n" +
@@ -33,8 +33,8 @@ public class RateLimiter {
             "\n" +
             "local elapsed = now - lastRefillTime\n" +
             "if elapsed > 0 then\n" +
-            "    local refillTokens = math.floor(elapsed * refillRate)\n" +
-            "    tokens = math.min(capacity, tokens + refillTokens)\n" +
+            "    local newTokens = elapsed * refillRate / 1000.0\n" +
+            "    tokens = math.min(capacity, tokens + newTokens)\n" +
             "    lastRefillTime = now\n" +
             "end\n" +
             "\n" +
@@ -47,18 +47,20 @@ public class RateLimiter {
             "redis.call('hmset', key, 'tokens', tokens, 'lastRefillTime', lastRefillTime)\n" +
             "redis.call('expire', key, 3600)\n" +
             "\n" +
-            "return {allowed, tokens}";
+            "return {allowed, math.floor(tokens)}";
+
+    @SuppressWarnings("unchecked")
+    private static final DefaultRedisScript<List> RATE_LIMIT_SCRIPT = new DefaultRedisScript<>(LUA_SCRIPT, List.class);
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
     public boolean tryAcquire(String key, int capacity, int refillRate) {
         String fullKey = RATE_LIMIT_KEY_PREFIX + key;
-        long now = System.currentTimeMillis() / 1000;
+        long now = System.currentTimeMillis();
 
-        DefaultRedisScript<List> script = new DefaultRedisScript<>(LUA_SCRIPT, List.class);
         List<Long> result = stringRedisTemplate.execute(
-                script,
+                RATE_LIMIT_SCRIPT,
                 Collections.singletonList(fullKey),
                 String.valueOf(capacity),
                 String.valueOf(refillRate),
@@ -70,10 +72,13 @@ public class RateLimiter {
             Long allowed = result.get(0);
             boolean acquired = allowed != null && allowed == 1;
             if (!acquired) {
-                log.warn("限流触发: key={}", fullKey);
+                log.warn("Rate limit triggered: key={}, remaining={}", fullKey, result.size() > 1 ? result.get(1) : "N/A");
+            } else {
+                log.debug("Rate limit passed: key={}, remaining={}", fullKey, result.size() > 1 ? result.get(1) : "N/A");
             }
             return acquired;
         }
+        log.error("Rate limit script returned null/empty: key={}", fullKey);
         return false;
     }
 }

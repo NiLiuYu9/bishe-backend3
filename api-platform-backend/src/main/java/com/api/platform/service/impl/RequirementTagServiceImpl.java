@@ -10,6 +10,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * 需求标签服务实现 —— 管理需求的技术标签
+ *
+ * 需求标签用于描述需求所需的技术栈，如"Java"、"Vue"、"Python"等
+ * 标签与需求为多对多关系，通过requirement_tag表关联
+ */
 @Service
 public class RequirementTagServiceImpl implements RequirementTagService {
 

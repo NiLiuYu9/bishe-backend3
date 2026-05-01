@@ -10,6 +10,13 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * API测试记录服务实现 —— 处理API在线测试记录的保存、查询、删除
+ *
+ * 测试记录分两种类型：
+ * - 自动记录(type=0)：在线测试API时自动保存的调用记录
+ * - 手动保存(type=1)：用户主动保存的测试记录
+ */
 @Service
 public class ApiTestRecordServiceImpl extends ServiceImpl<ApiTestRecordMapper, ApiTestRecord> implements ApiTestRecordService {
 

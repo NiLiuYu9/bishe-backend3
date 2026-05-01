@@ -15,6 +15,15 @@ import org.springframework.stereotype.Service;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
+/**
+ * 密钥服务实现 —— 管理用户的AK/SK访问密钥
+ *
+ * AK/SK用于API调用时的身份鉴权：
+ * - AccessKey(AK)：标识调用者身份，明文传输
+ * - SecretKey(SK)：用于生成签名，不在请求中传输
+ * - 签名算法：SHA256(body + "." + secretKey)
+ * - 使用ReentrantLock保证AK/SK生成的线程安全
+ */
 @Service
 public class AccessKeyServiceImpl extends ServiceImpl<UserMapper, User> implements AccessKeyService {
 

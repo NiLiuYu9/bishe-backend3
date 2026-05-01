@@ -37,6 +37,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 需求服务实现 —— 处理需求的发布、申请、接单、交付、确认等核心业务逻辑
+ *
+ * 需求状态流转：
+ *   open(开放中) → in_progress(进行中) → delivered(已交付) → completed(已完成)
+ *                → cancelled(已取消)
+ *                → after_sale(售后中)
+ *
+ * 申请者状态流转：
+ *   pending(待审核) → accepted(已接受) / rejected(已拒绝)
+ *
+ * 关键业务规则：
+ * - 只有需求发布者才能选择申请者、完成需求、取消需求
+ * - 选择申请者后，其他待审核申请自动变为rejected
+ * - 只有被接受的申请者才能交付需求
+ * - 状态变更时发送WebSocket通知
+ */
 @Service
 public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requirement> implements RequirementService {
 
@@ -52,6 +69,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
     @Autowired
     private RequirementTagService requirementTagService;
 
+    /** 分页查询需求列表（默认只显示open状态的需求） */
     @Override
     public IPage<RequirementVO> pageList(RequirementQueryDTO queryDTO, Long currentUserId) {
         Page<Requirement> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
@@ -63,6 +81,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         return convertToVOPage(requirementPage, currentUserId);
     }
 
+    /** 获取需求详情（含申请者列表和被选中的申请者信息） */
     @Override
     public RequirementVO getDetailById(Long id) {
         Requirement requirement = getById(id);
@@ -104,10 +123,18 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         return vo;
     }
 
+    /**
+     * 发布需求
+     *
+     * 业务流程：
+     * 1. 校验截止日期不能早于当前时间
+     * 2. DTO转Entity，初始状态为open（开放中）
+     * 3. 保存需求及标签
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RequirementVO create(Long userId, RequirementCreateDTO createDTO) {
-        if (createDTO.getDeadline() != null && createDTO.getDeadline().isBefore(java.time.LocalDate.now())) {
+        if (createDTO.getDeadline() != null && createDTO.getDeadline().isBefore(java.time.LocalDate.now())) { // 校验截止日期
             throw new BusinessException("截止日期不能早于当前时间");
         }
         Requirement requirement = new Requirement();
@@ -118,7 +145,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         requirement.setUserId(userId);
         requirement.setRequestParams(createDTO.getRequestParamsJson());
         requirement.setResponseParams(createDTO.getResponseParamsJson());
-        requirement.setStatus("open");
+        requirement.setStatus("open"); // 初始状态：开放中
         save(requirement);
         if (createDTO.getTags() != null) {
             requirementTagService.saveRequirementTags(requirement.getId(), createDTO.getTags());
@@ -126,6 +153,10 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         return convertToVO(requirement);
     }
 
+    /**
+     * 编辑需求（仅open状态可编辑）
+     * 校验权限和状态后更新需求信息及标签
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RequirementVO update(Long userId, Long id, RequirementCreateDTO updateDTO) {
@@ -136,7 +167,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         if (!requirement.getUserId().equals(userId)) {
             throw new BusinessException("无权限编辑该需求");
         }
-        if (!"open".equals(requirement.getStatus())) {
+        if (!"open".equals(requirement.getStatus())) { // 只有开放中的需求才能编辑
             throw new BusinessException("只有开放中的需求才能编辑");
         }
         if (updateDTO.getDeadline() != null && updateDTO.getDeadline().isBefore(java.time.LocalDate.now())) {
@@ -155,6 +186,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         return convertToVO(requirement);
     }
 
+    /** 删除需求（进行中的需求不可删除，同时删除关联的申请记录） */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long userId, Long id) {
@@ -173,6 +205,10 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
                 .eq(RequirementApplicant::getRequirementId, id));
     }
 
+    /**
+     * 申请需求
+     * 校验需求状态、不能申请自己发布的需求、不能重复申请
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void apply(Long userId, Long requirementId, RequirementApplyDTO applyDTO) {
@@ -200,6 +236,11 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         applicantMapper.insert(applicant);
     }
 
+    /**
+     * 选择申请者（接单）
+     * 选择后：其他待审核申请自动变为rejected，需求状态变为in_progress
+     * 同时发送WebSocket通知被选中的申请者
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void selectApplicant(Long userId, Long requirementId, RequirementApplicantSelectDTO selectDTO) {
@@ -223,11 +264,11 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         applicantMapper.update(null, new LambdaUpdateWrapper<RequirementApplicant>()
                 .eq(RequirementApplicant::getRequirementId, requirementId)
                 .eq(RequirementApplicant::getStatus, "pending")
-                .set(RequirementApplicant::getStatus, "rejected"));
+                .set(RequirementApplicant::getStatus, "rejected")); // 其他待审核申请自动拒绝
         applicantMapper.update(null, new LambdaUpdateWrapper<RequirementApplicant>()
                 .eq(RequirementApplicant::getId, selectDTO.getApplicantId())
-                .set(RequirementApplicant::getStatus, "accepted"));
-        requirement.setStatus("in_progress");
+                .set(RequirementApplicant::getStatus, "accepted")); // 选中的申请者设为accepted
+        requirement.setStatus("in_progress"); // 需求状态变为进行中
         updateById(requirement);
         RequirementApplicant acceptedApplicant = applicantMapper.selectById(selectDTO.getApplicantId());
         notificationService.sendNotification(
@@ -240,6 +281,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         );
     }
 
+    /** 撤回申请（仅pending状态的申请可撤回） */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void withdrawApply(Long userId, Long requirementId) {
@@ -262,6 +304,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         applicantMapper.deleteById(applicant.getId());
     }
 
+    /** 完成需求（发布者操作，需有被接受的申请者） */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void complete(Long userId, Long requirementId) {
@@ -285,6 +328,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         updateById(requirement);
     }
 
+    /** 取消需求（已完成的需求不可取消） */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancel(Long userId, Long requirementId) {
@@ -305,6 +349,10 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         updateById(requirement);
     }
 
+    /**
+     * 交付需求（被接受的申请者操作）
+     * 设置交付链接，状态变为delivered，通知发布者确认
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deliver(Long userId, Long requirementId, RequirementDeliverDTO deliverDTO) {
@@ -325,7 +373,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
             throw new BusinessException("无权限交付该需求");
         }
         requirement.setDeliveryUrl(deliverDTO.getDeliveryUrl());
-        requirement.setStatus("delivered");
+        requirement.setStatus("delivered"); // 状态变为已交付
         updateById(requirement);
         notificationService.sendNotification(
             requirement.getUserId(),
@@ -337,6 +385,10 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         );
     }
 
+    /**
+     * 确认交付（发布者操作）
+     * 状态变为completed，通知开发者需求已确认完成
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void confirmDelivery(Long userId, Long requirementId) {
@@ -350,7 +402,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         if (!"delivered".equals(requirement.getStatus())) {
             throw new BusinessException("只有已交付的需求才能确认");
         }
-        requirement.setStatus("completed");
+        requirement.setStatus("completed"); // 状态变为已完成
         updateById(requirement);
         RequirementApplicant acceptedApplicant = applicantMapper.selectOne(new LambdaQueryWrapper<RequirementApplicant>()
                 .eq(RequirementApplicant::getRequirementId, requirementId)
@@ -367,6 +419,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         }
     }
 
+    /** 查询我发布的需求 */
     @Override
     public IPage<RequirementVO> getMyPublished(Long userId, RequirementQueryDTO queryDTO) {
         Page<Requirement> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
@@ -376,6 +429,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         return convertToVOPage(requirementPage);
     }
 
+    /** 查询我申请的需求（含申请状态） */
     @Override
     public IPage<RequirementVO> getMyApplied(Long userId, RequirementQueryDTO queryDTO) {
         Page<RequirementApplicant> applicantPage = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
@@ -425,6 +479,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         return voPage;
     }
 
+    /** 构建需求查询条件（支持关键词、预算范围、状态筛选及多种排序方式） */
     private LambdaQueryWrapper<Requirement> buildQueryWrapper(RequirementQueryDTO queryDTO) {
         LambdaQueryWrapper<Requirement> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.and(StrUtil.isNotBlank(queryDTO.getKeyword()), wrapper ->
@@ -516,6 +571,7 @@ public class RequirementServiceImpl extends ServiceImpl<RequirementMapper, Requi
         return vo;
     }
 
+    /** 更新需求状态并批量通知相关用户（发布者+被接受的申请者） */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateStatus(Long id, String status) {

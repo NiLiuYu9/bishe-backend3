@@ -17,6 +17,15 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * 智能匹配服务实现 —— 基于用户标签与需求标签的相似度进行需求推荐
+ *
+ * 匹配算法：Levenshtein编辑距离
+ * - 计算用户每个标签与需求每个标签的编辑距离
+ * - 编辑距离越小，两个标签越相似
+ * - 综合所有标签的相似度得出匹配评分
+ * - 按匹配评分降序排列，推荐最匹配的需求
+ */
 @Service
 public class MatchingServiceImpl implements MatchingService {
 

@@ -22,6 +22,19 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+/**
+ * 支付宝支付服务实现 —— 处理沙箱支付、回调验签、支付查询
+ *
+ * 核心业务流程：
+ * 1. 创建支付：生成支付宝PC网站支付表单（沙箱环境）
+ * 2. 异步回调：验签 → 校验交易状态 → 校验金额 → 更新订单状态 → 增加配额
+ * 3. 支付查询：通过支付宝SDK查询交易状态
+ *
+ * 安全机制：
+ * - 使用RSA2签名算法验签，防止回调伪造
+ * - 校验订单金额与支付金额一致性
+ * - 幂等处理：已支付订单不重复处理
+ */
 @Service
 public class AlipayServiceImpl implements AlipayService {
 
@@ -38,6 +51,7 @@ public class AlipayServiceImpl implements AlipayService {
 
     private AlipayClient alipayClient;
 
+    /** 初始化支付宝客户端（沙箱环境），设置超时时间 */
     @PostConstruct
     public void init() {
         try {
@@ -58,6 +72,11 @@ public class AlipayServiceImpl implements AlipayService {
         }
     }
 
+    /**
+     * 创建支付订单
+     * 生成支付宝PC网站支付表单（FAST_INSTANT_TRADE_PAY产品码）
+     * 设置同步回跳URL和异步通知URL
+     */
     @Override
     public String createPayment(Long orderId, String orderNo, String subject, String totalAmount) throws Exception {
         log.info("开始创建支付订单: orderId={}, orderNo={}, subject={}, amount={}", orderId, orderNo, subject, totalAmount);
@@ -85,6 +104,16 @@ public class AlipayServiceImpl implements AlipayService {
         return form;
     }
 
+    /**
+     * 验证并处理支付宝异步回调
+     *
+     * 业务流程：
+     * 1. RSA2签名验证（防止回调伪造）
+     * 2. 校验交易状态（TRADE_SUCCESS/TRADE_FINISHED）
+     * 3. 查询订单，校验金额一致性
+     * 4. 更新订单状态为paid，记录支付信息
+     * 5. 给用户增加API调用配额
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean verifyAndProcessNotify(Map<String, String> params) {

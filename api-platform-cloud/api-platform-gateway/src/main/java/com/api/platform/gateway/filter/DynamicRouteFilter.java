@@ -14,6 +14,13 @@ import java.net.URI;
 
 import static org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR;
 
+/**
+ * 动态路由过滤器 —— 网关过滤器链第4环（Order=2）
+ *
+ * 职责：根据接口信息中的 targetUrl 动态路由请求到目标API服务
+ * 将原始请求的路径替换为接口配置的 targetUrl，实现API调用的转发
+ * 例如：请求 /invoke/api_1 → 转发到 http://mock-api:8101/text/process
+ */
 @Slf4j
 @Component
 public class DynamicRouteFilter implements GlobalFilter, Ordered {

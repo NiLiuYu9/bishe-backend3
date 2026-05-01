@@ -15,6 +15,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+/**
+ * 接口校验过滤器 —— 网关过滤器链第3环（Order=1）
+ *
+ * 职责：校验请求的接口是否存在、是否已审核通过、用户是否有调用配额
+ * 校验流程：
+ * 1. 根据请求路径+方法查询接口信息（通过Dubbo调用后端服务）
+ * 2. 检查接口是否存在
+ * 3. 检查接口状态是否为 approved（已审核通过）
+ * 4. 检查用户是否还有剩余调用配额
+ * 5. 将接口信息存入请求属性，供后续过滤器使用
+ */
 @Slf4j
 @Component
 public class InterfaceValidateFilter implements GlobalFilter, Ordered {

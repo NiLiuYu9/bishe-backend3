@@ -35,6 +35,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * API调用控制器 —— 处理通过AK/SK直接调用API及配额查询请求
+ *
+ * 路由前缀：/invoke
+ * 所有接口返回统一格式 Result&lt;T&gt;，由 GlobalExceptionHandler 统一处理异常
+ *
+ * 与网关调用不同，此控制器用于前端页面内直接发起API调用，
+ * 走的是后端代理转发模式，而非网关路由模式
+ */
 @RestController
 @RequestMapping("/invoke")
 public class ApiInvokeController {
@@ -63,8 +72,24 @@ public class ApiInvokeController {
     @Autowired
     private RateLimiter rateLimiter;
 
-    private static final int DEFAULT_CALL_LIMIT = 100;
+    private static final int RATE_LIMIT_CAPACITY = 2;
 
+    private static final int RATE_LIMIT_REFILL_RATE = 2;
+
+    /**
+     * 调用API
+     *
+     * 业务流程：
+     * 1. 校验 accessKey/secretKey 有效性
+     * 2. 从缓存或数据库获取API信息，校验审核状态
+     * 3. 若API启用了白名单，检查用户是否在白名单中
+     * 4. 令牌桶限流检查（按用户+API维度）
+     * 5. 扣减用户配额
+     * 6. 通过 RestTemplate 代理转发到目标API
+     *
+     * @param invokeDTO 调用请求（apiId、accessKey、secretKey、请求参数）
+     * @return Result&lt;ApiInvokeResultVO&gt; 调用结果（成功/失败、响应数据、耗时等）
+     */
     @PostMapping("/call")
     public Result<ApiInvokeResultVO> invokeApi(@RequestBody ApiInvokeDTO invokeDTO) {
         if (invokeDTO.getApiId() == null) {
@@ -89,12 +114,10 @@ public class ApiInvokeController {
             }
         }
 
-        int callLimit = apiInfo.getCallLimit() != null && apiInfo.getCallLimit() > 0 
-                ? apiInfo.getCallLimit() : DEFAULT_CALL_LIMIT;
         String rateLimitKey = "invoke:" + user.getId() + ":" + apiInfo.getId();
         
-        if (!rateLimiter.tryAcquire(rateLimitKey, callLimit, callLimit)) {
-            throw new BusinessException(429, "已达到API调用频率限制(" + callLimit + "次/分钟)，请稍后再试");
+        if (!rateLimiter.tryAcquire(rateLimitKey, RATE_LIMIT_CAPACITY, RATE_LIMIT_REFILL_RATE)) {
+            throw new BusinessException(429, "API调用频率超限(每秒最多2次)，请稍后再试");
         }
 
         userApiQuotaService.deductQuota(user.getId(), invokeDTO.getApiId());
@@ -183,6 +206,15 @@ public class ApiInvokeController {
         return null;
     }
 
+    /**
+     * 查询用户所有API的配额列表
+     *
+     * 通过 accessKey/secretKey 鉴权后，返回该用户所有已购买API的配额使用情况
+     *
+     * @param accessKey 用户访问密钥
+     * @param secretKey 用户秘密密钥
+     * @return Result&lt;List&lt;UserQuotaVO&gt;&gt; 配额列表（含API名称、总量、已用量、剩余量）
+     */
     @GetMapping("/quota/list")
     public Result<List<UserQuotaVO>> getUserQuotas(
             @RequestParam String accessKey,
@@ -236,6 +268,16 @@ public class ApiInvokeController {
         return apiInfo.getName();
     }
 
+    /**
+     * 检查用户对指定API的配额情况
+     *
+     * 通过 accessKey/secretKey 鉴权后，返回该用户对指定API的配额详情
+     *
+     * @param accessKey 用户访问密钥
+     * @param secretKey 用户秘密密钥
+     * @param apiId     API ID
+     * @return Result&lt;QuotaCheckVO&gt; 配额检查结果（是否有配额、总量、已用量、剩余量）
+     */
     @GetMapping("/quota/check")
     public Result<QuotaCheckVO> checkQuota(
             @RequestParam String accessKey,

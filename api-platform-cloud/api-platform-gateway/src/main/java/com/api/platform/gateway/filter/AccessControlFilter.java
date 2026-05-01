@@ -13,6 +13,12 @@ import reactor.core.publisher.Mono;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * IP访问控制过滤器 —— 网关过滤器链第1环（Order=-1）
+ *
+ * 职责：校验请求来源IP是否在黑名单中，黑名单IP直接拒绝访问
+ * 执行顺序最先，确保恶意IP在鉴权之前就被拦截
+ */
 @Slf4j
 @Component
 public class AccessControlFilter implements GlobalFilter, Ordered {

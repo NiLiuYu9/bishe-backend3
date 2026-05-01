@@ -23,6 +23,12 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * API分类服务实现 —— 处理API分类的CRUD和启停操作
+ *
+ * 每个API必须属于一个分类，分类用于API市场的导航和筛选
+ * 分类支持启用/禁用，禁用后该分类下的API不会在市场展示
+ */
 @Service
 public class ApiTypeServiceImpl extends ServiceImpl<ApiTypeMapper, ApiType> implements ApiTypeService {
 

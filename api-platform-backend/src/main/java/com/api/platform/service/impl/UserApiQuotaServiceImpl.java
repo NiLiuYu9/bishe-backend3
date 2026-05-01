@@ -22,6 +22,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 用户API配额服务实现 —— 管理用户购买API后的调用配额
+ *
+ * 配额机制：
+ * - 用户购买API后获得对应次数的调用配额（totalCount）
+ * - 每次调用API后已使用次数递增（usedCount），由网关通过Dubbo调用更新
+ * - 剩余次数 = totalCount - usedCount
+ * - userId + apiId 为联合唯一约束
+ */
 @Service
 public class UserApiQuotaServiceImpl extends ServiceImpl<UserApiQuotaMapper, UserApiQuota> implements UserApiQuotaService {
 

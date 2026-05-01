@@ -22,6 +22,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * API白名单服务实现 —— 管理API的访问白名单
+ *
+ * 白名单模式：当API启用白名单后，只有白名单中的用户才能调用该API
+ * 适用于内部API或付费后限制访问的场景
+ */
 @Service
 public class ApiWhitelistServiceImpl extends ServiceImpl<ApiWhitelistMapper, ApiWhitelist> implements ApiWhitelistService {
 

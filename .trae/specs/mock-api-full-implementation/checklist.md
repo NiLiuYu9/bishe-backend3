@@ -1,0 +1,12 @@
+- [x] mock-api (8081) 实现了 19 个接口：图像识别6个 + 文本处理8个 + 语音处理5个
+- [x] mock-api-2 (8082) 实现了 20 个接口：数据服务6个 + 地图服务5个 + 支付服务4个 + 短信服务5个
+- [x] mock-api-3 (8083) 实现了 21 个接口：人脸识别6个 + OCR识别8个 + 翻译服务7个
+- [x] 所有接口的 HTTP 方法与数据库 api_info.method 一致（GET/POST）
+- [x] 所有接口的路径与数据库 api_info.endpoint 一致
+- [x] 所有接口返回数据符合数据库 api_info.response_params 定义的字段
+- [x] 所有接口使用 com.api.platform.common.Result 统一封装响应
+- [x] SQL 更新脚本正确将 id 1-19 的 target_url 改为 http://localhost:8081
+- [x] SQL 更新脚本正确将 id 20-39 的 target_url 改为 http://localhost:8082
+- [x] SQL 更新脚本正确将 id 40-60 的 target_url 改为 http://localhost:8083
+- [x] 项目记忆文件已更新 api_platform.sql 表结构信息
+- [x] 3 个 mock-api 项目 mvn clean compile 编译通过

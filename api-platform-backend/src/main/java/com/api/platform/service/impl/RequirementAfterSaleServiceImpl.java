@@ -5,7 +5,6 @@ import com.api.platform.constants.NotificationType;
 import com.api.platform.dto.AfterSaleCreateDTO;
 import com.api.platform.dto.AfterSaleDecideDTO;
 import com.api.platform.dto.AfterSaleQueryDTO;
-import com.api.platform.dto.AfterSaleRespondDTO;
 import com.api.platform.entity.Requirement;
 import com.api.platform.entity.RequirementAfterSale;
 import com.api.platform.entity.RequirementApplicant;
@@ -36,6 +35,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 需求售后服务实现 —— 处理需求售后申请、管理员裁定、售后对话等核心业务逻辑
+ *
+ * 售后状态流转：pending(待处理) → resolved(已解决) / rejected(已驳回)
+ * 裁定结果：completed(完成退款) / refunded(退款)
+ *
+ * 售后流程：
+ * 1. 申请人发起售后（需提供原因和未实现功能列表）
+ * 2. 管理员查看双方对话，做出裁定
+ * 3. 裁定结果通知双方，如退款则同步处理
+ */
 @Service
 public class RequirementAfterSaleServiceImpl extends ServiceImpl<RequirementAfterSaleMapper, RequirementAfterSale> implements RequirementAfterSaleService {
 
@@ -87,32 +97,6 @@ public class RequirementAfterSaleServiceImpl extends ServiceImpl<RequirementAfte
         save(afterSale);
         requirementService.updateStatus(createDTO.getRequirementId(), "after_sale");
         return convertToVO(afterSale);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void respondAfterSale(Long developerId, Long afterSaleId, AfterSaleRespondDTO respondDTO) {
-        RequirementAfterSale afterSale = getById(afterSaleId);
-        if (afterSale == null) {
-            throw new BusinessException("售后申请不存在");
-        }
-        if (!afterSale.getDeveloperId().equals(developerId)) {
-            throw new BusinessException("无权限回应该售后申请");
-        }
-        if (!"pending".equals(afterSale.getStatus())) {
-            throw new BusinessException("该售后申请已处理");
-        }
-        afterSale.setDeveloperResponse(respondDTO.getDeveloperResponse());
-        afterSale.setDeveloperResponseTime(LocalDateTime.now());
-        updateById(afterSale);
-        notificationService.sendNotification(
-            afterSale.getApplicantId(),
-            NotificationType.AFTER_SALE_STATUS_UPDATE.getCode(),
-            "售后申请已回应",
-            "您的售后申请已得到开发者回应",
-            afterSaleId,
-            "after_sale"
-        );
     }
 
     @Override

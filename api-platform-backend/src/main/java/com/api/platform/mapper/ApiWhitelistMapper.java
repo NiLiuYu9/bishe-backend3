@@ -4,6 +4,11 @@ import com.api.platform.entity.ApiWhitelist;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
+/**
+ * API白名单Mapper接口
+ * <p>核心职责：提供API白名单表（api_whitelist）的基础CRUD操作，
+ * 继承MyBatis-Plus的BaseMapper，自动拥有单表增删改查能力。</p>
+ */
 @Mapper
 public interface ApiWhitelistMapper extends BaseMapper<ApiWhitelist> {
 }

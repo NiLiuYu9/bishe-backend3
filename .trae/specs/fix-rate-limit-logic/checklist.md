@@ -1,0 +1,12 @@
+- [x] 后端 RateLimiter Lua 脚本使用毫秒级时间戳，令牌补充时间推进逻辑正确（仅推进实际消耗的时间）
+- [x] 后端 RateLimiter DefaultRedisScript 为类级别 static final 常量
+- [x] 网关 RateLimiter Lua 脚本使用毫秒级时间戳，与后端逻辑一致
+- [x] 网关 RateLimiter DefaultRedisScript 为类级别 static final 常量
+- [x] 网关 RateLimitFilter 固定 capacity=2, refillRate=2，不再使用 callLimit 动态计算
+- [x] 网关 RateLimitFilter 未识别用户时返回 401 而非放行
+- [x] 后端 ApiInvokeController 固定 capacity=2, refillRate=2
+- [x] TestController.testCall 新增限流检查（capacity=2, refillRate=2）
+- [x] OrderController 上的 @RateLimit 注解已移除
+- [x] ApiController 上的 @RateLimit 注解已移除（3处）
+- [x] 后端 mvn clean compile 通过
+- [x] 云模块 mvn clean compile 通过

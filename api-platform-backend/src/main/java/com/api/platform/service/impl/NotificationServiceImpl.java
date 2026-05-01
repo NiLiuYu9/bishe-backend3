@@ -23,6 +23,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 通知服务实现 —— 处理系统通知的创建、查询、标记已读，并通过WebSocket实时推送
+ *
+ * 通知类型包括：订单支付成功、需求状态变更、售后进展、API审核结果等
+ * 创建通知时会同时通过WebSocket推送给对应用户，实现实时通知
+ */
 @Service
 public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Notification> implements NotificationService {
 

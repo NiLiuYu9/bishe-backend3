@@ -31,6 +31,12 @@ public class RequirementController {
         return Result.success(PageResultVO.of(page.getRecords(), page.getTotal()));
     }
 
+    /**
+     * 获取需求详情
+     *
+     * @param id 需求ID
+     * @return Result&lt;RequirementVO&gt; 需求详情（含申请人列表、标签列表）
+     */
     @GetMapping("/detail/{id}")
     public Result<RequirementVO> getDetail(@PathVariable Long id) {
         RequirementVO vo = requirementService.getDetailById(id);
@@ -40,6 +46,15 @@ public class RequirementController {
         return Result.success(vo);
     }
 
+    /**
+     * 发布需求
+     *
+     * 需求创建后状态默认为 open，开发者可申请接单
+     *
+     * @param createDTO 需求创建表单（标题、描述、预算、截止日期、技术标签）
+     * @param session   HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;RequirementVO&gt; 创建成功的需求信息
+     */
     @PostMapping("/create")
     public Result<RequirementVO> create(@Validated @RequestBody RequirementCreateDTO createDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -47,6 +62,16 @@ public class RequirementController {
         return Result.success(vo);
     }
 
+    /**
+     * 更新需求信息
+     *
+     * 仅需求发布者可更新，且需求状态必须为 open
+     *
+     * @param id        需求ID
+     * @param updateDTO 需求更新表单（与创建表单字段相同）
+     * @param session   HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;RequirementVO&gt; 更新后的需求信息
+     */
     @PutMapping("/update/{id}")
     public Result<RequirementVO> update(@PathVariable Long id, @Validated @RequestBody RequirementCreateDTO updateDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -54,6 +79,15 @@ public class RequirementController {
         return Result.success(vo);
     }
 
+    /**
+     * 删除需求
+     *
+     * 仅需求发布者可删除，且需求状态必须为 open
+     *
+     * @param id      需求ID
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 删除成功无返回数据
+     */
     @DeleteMapping("/delete/{id}")
     public Result<Void> delete(@PathVariable Long id, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -82,6 +116,15 @@ public class RequirementController {
         return Result.success();
     }
 
+    /**
+     * 完成需求（需求方确认完成）
+     *
+     * 需求发布者确认需求已完成，需求状态变为 completed
+     *
+     * @param id      需求ID
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 确认成功无返回数据
+     */
     @PostMapping("/complete/{id}")
     public Result<Void> complete(@PathVariable Long id, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -110,6 +153,15 @@ public class RequirementController {
         return Result.success();
     }
 
+    /**
+     * 获取当前用户相关的需求列表
+     *
+     * 当 status=applied 时返回用户申请过的需求，否则返回用户发布的需求
+     *
+     * @param queryDTO 查询条件（status=applied 时查申请列表，其他查发布列表）
+     * @param session  HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;PageResultVO&lt;RequirementVO&gt;&gt; 分页的需求列表
+     */
     @GetMapping("/my-requirements")
     public Result<PageResultVO<RequirementVO>> getMyRequirements(RequirementQueryDTO queryDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);

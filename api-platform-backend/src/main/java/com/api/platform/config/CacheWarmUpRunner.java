@@ -22,6 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 缓存预热启动器
+ * <p>核心职责：应用启动时自动加载所有已审核通过的API信息到缓存，
+ * 包括API详情缓存和路径映射缓存，避免首次请求时缓存未命中导致数据库压力。</p>
+ */
 @Component
 public class CacheWarmUpRunner implements CommandLineRunner {
 
@@ -39,16 +44,25 @@ public class CacheWarmUpRunner implements CommandLineRunner {
     @Autowired
     private ApiCacheService apiCacheService;
 
+    /**
+     * 应用启动后执行缓存预热
+     * <p>加载所有已审核通过的API，批量写入缓存（API详情+路径映射），
+     * 同时预加载分类名称和用户名称的映射关系，避免N+1查询。</p>
+     *
+     * @param args 启动参数
+     */
     @Override
     public void run(String... args) throws Exception {
         logger.info("开始缓存预热...");
         
         long startTime = System.currentTimeMillis();
         
+        // 查询所有已审核通过的API
         LambdaQueryWrapper<ApiInfo> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(ApiInfo::getStatus, "approved");
         List<ApiInfo> apiInfoList = apiInfoMapper.selectList(queryWrapper);
         
+        // 预加载分类名称和用户名称映射，避免逐条查询
         Map<Long, String> typeNameMap = getApiTypeNameMap();
         Map<Long, String> usernameMap = getUsernameMap();
         
@@ -56,7 +70,9 @@ public class CacheWarmUpRunner implements CommandLineRunner {
         for (ApiInfo apiInfo : apiInfoList) {
             try {
                 ApiVO apiVO = convertToApiVO(apiInfo, typeNameMap, usernameMap);
+                // 写入API详情缓存
                 apiCacheService.cacheApiDetail(apiInfo.getId(), apiVO);
+                // 写入路径→ID映射缓存
                 apiCacheService.cachePathMapping(apiInfo.getEndpoint(), apiInfo.getMethod(), apiInfo.getId());
                 count++;
             } catch (Exception e) {
@@ -68,18 +84,38 @@ public class CacheWarmUpRunner implements CommandLineRunner {
         logger.info("缓存预热完成，共预热 {} 个API，耗时 {} ms", count, endTime - startTime);
     }
 
+    /**
+     * 获取分类ID→名称映射
+     *
+     * @return 分类ID与名称的映射Map
+     */
     private Map<Long, String> getApiTypeNameMap() {
         List<ApiType> apiTypes = apiTypeMapper.selectList(null);
         return apiTypes.stream()
                 .collect(Collectors.toMap(ApiType::getId, ApiType::getName));
     }
 
+    /**
+     * 获取用户ID→用户名映射
+     *
+     * @return 用户ID与用户名的映射Map
+     */
     private Map<Long, String> getUsernameMap() {
         List<User> users = userMapper.selectList(null);
         return users.stream()
                 .collect(Collectors.toMap(User::getId, User::getUsername));
     }
 
+    /**
+     * ApiInfo实体 → ApiVO转换（含分类名称和用户名填充）
+     * <p>与Service层转换不同，此方法额外填充typeName和username，
+     * 并解析请求参数和响应参数的JSON字符串为对象列表。</p>
+     *
+     * @param apiInfo      API信息实体
+     * @param typeNameMap  分类ID→名称映射
+     * @param usernameMap  用户ID→用户名映射
+     * @return 包含完整信息的API详情VO
+     */
     private ApiVO convertToApiVO(ApiInfo apiInfo, Map<Long, String> typeNameMap, Map<Long, String> usernameMap) {
         if (apiInfo == null) {
             return null;

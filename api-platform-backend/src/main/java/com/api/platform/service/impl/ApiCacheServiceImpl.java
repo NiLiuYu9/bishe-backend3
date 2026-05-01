@@ -18,6 +18,15 @@ import java.util.concurrent.TimeUnit;
 
 import static com.api.platform.constants.ApiCacheConstant.*;
 
+/**
+ * API缓存服务实现 —— 管理API详情、路径映射、空值缓存等Redis缓存操作
+ *
+ * 缓存策略：
+ * - API详情缓存到Redis Hash（key: api:info:{id}），减少数据库查询
+ * - 路径映射缓存（endpoint+method → apiId），用于网关快速路由
+ * - 空值缓存防止缓存穿透（key: api:null:{id}），避免频繁查询不存在的API
+ * - 列表缓存：API变更时清除所有列表缓存，保证数据一致性
+ */
 @Service
 public class ApiCacheServiceImpl implements ApiCacheService {
 

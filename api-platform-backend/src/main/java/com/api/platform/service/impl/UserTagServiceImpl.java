@@ -9,6 +9,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * 用户标签服务实现 —— 管理用户的技能标签
+ *
+ * 用户标签用于智能匹配：系统根据用户标签与需求标签的相似度推荐需求
+ * 每个用户可以有多个标签，标签保存后全量替换
+ */
 @Service
 public class UserTagServiceImpl implements UserTagService {
 

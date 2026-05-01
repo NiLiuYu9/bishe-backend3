@@ -1,0 +1,14 @@
+- [x] insert_test_data.sql 包含14张表的INSERT语句，ID范围9001+
+- [x] delete_test_data.sql 按依赖反序删除所有测试数据，不影响原有数据
+- [x] 订单数据覆盖5种状态(pending/paid/completed/refunded/cancelled)
+- [x] 需求数据覆盖5种状态(open/in_progress/delivered/completed/cancelled)
+- [x] 售后数据覆盖3种状态(pending/resolved/rejected)，含2种result(completed/refunded)
+- [x] API评价包含嵌套回复(原评论/上架者回复/评论者回复)
+- [x] API调用统计覆盖7天，每天有数据
+- [x] API测试记录包含自动(0)和手动(1)两种类型
+- [x] 通知消息包含已读和未读状态
+- [x] 用户API配额包含不同使用程度(已用完/部分使用/未使用)
+- [x] 售后对话包含3种发送者类型(applicant/developer/admin)
+- [x] 所有外键关联数据保持业务一致性(订单-评价、订单-配额、需求-申请人、需求-售后等)
+- [x] api_invoke_daily中的api_name和api_owner_id与api_info表一致
+- [x] 时间数据分布在2026-04-02至2026-04-08范围内

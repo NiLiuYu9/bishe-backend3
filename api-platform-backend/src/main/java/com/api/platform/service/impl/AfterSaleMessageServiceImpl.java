@@ -23,6 +23,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 售后消息服务实现 —— 处理售后对话消息的发送和查询
+ *
+ * 售后对话中包含三方角色：申请人(applicant)、开发者(developer)、管理员(admin)
+ * 每条消息记录发送者ID和发送者类型，用于区分消息来源
+ */
 @Service
 public class AfterSaleMessageServiceImpl extends ServiceImpl<AfterSaleMessageMapper, AfterSaleMessage> implements AfterSaleMessageService {
 

@@ -46,6 +46,16 @@ public class ApiWhitelistController {
         return Result.success();
     }
 
+    /**
+     * 移除白名单用户
+     *
+     * 仅API创建者可操作
+     *
+     * @param apiId      API ID
+     * @param userId     待移除的用户ID
+     * @param session    HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 移除成功无返回数据
+     */
     @DeleteMapping("/remove/{apiId}/{userId}")
     public Result<Void> removeWhitelist(@PathVariable Long apiId, 
                                         @PathVariable Long userId, 
@@ -55,6 +65,17 @@ public class ApiWhitelistController {
         return Result.success();
     }
 
+    /**
+     * 获取API白名单列表
+     *
+     * API创建者和管理员可查看
+     *
+     * @param apiId    API ID
+     * @param pageNum  页码，默认1
+     * @param pageSize 每页数量，默认10
+     * @param session  HttpSession，用于获取当前用户ID和管理员标识
+     * @return Result&lt;PageResultVO&lt;WhitelistUserVO&gt;&gt; 分页的白名单用户列表
+     */
     @GetMapping("/list/{apiId}")
     public Result<PageResultVO<WhitelistUserVO>> getWhitelistList(
             @PathVariable Long apiId,
@@ -91,6 +112,15 @@ public class ApiWhitelistController {
         return Result.success(PageResultVO.of(voList, page.getTotal()));
     }
 
+    /**
+     * 启用API白名单
+     *
+     * 仅API创建者可操作，启用后仅白名单中的用户可调用该API
+     *
+     * @param apiId   API ID
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 启用成功无返回数据
+     */
     @PostMapping("/enable/{apiId}")
     public Result<Void> enableWhitelist(@PathVariable Long apiId, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -98,6 +128,15 @@ public class ApiWhitelistController {
         return Result.success();
     }
 
+    /**
+     * 禁用API白名单
+     *
+     * 仅API创建者可操作，禁用后所有用户均可调用该API
+     *
+     * @param apiId   API ID
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 禁用成功无返回数据
+     */
     @PostMapping("/disable/{apiId}")
     public Result<Void> disableWhitelist(@PathVariable Long apiId, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);

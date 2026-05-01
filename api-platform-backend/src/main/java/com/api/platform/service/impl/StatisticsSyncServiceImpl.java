@@ -22,6 +22,15 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+/**
+ * 统计同步服务实现 —— 定时将Redis中的统计数据同步到MySQL
+ *
+ * 同步策略：
+ * - Redis存储实时调用次数（高性能计数），MySQL存储持久化统计
+ * - 定时任务从Redis读取当日调用数据，写入MySQL的api_invoke_daily表
+ * - 同步完成后更新api_info表的统计字段（invokeCount, successCount, failCount, rating）
+ * - 防止Redis数据丢失导致统计不准确
+ */
 @Slf4j
 @Service
 public class StatisticsSyncServiceImpl implements StatisticsSyncService {

@@ -4,6 +4,12 @@ import lombok.Data;
 
 import java.io.Serializable;
 
+/**
+ * 统一响应封装 —— 网关和公共模块共用的响应格式
+ *
+ * 格式：{ code: 状态码, data: 数据, message: 提示信息 }
+ * code=0 或 code=200 表示成功，其他表示失败
+ */
 @Data
 public class Result<T> implements Serializable {
 

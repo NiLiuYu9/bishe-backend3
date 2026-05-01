@@ -9,6 +9,20 @@ import com.api.platform.client.utils.SignUtils;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * API客户端SDK —— 封装API调用的HTTP请求和签名逻辑
+ *
+ * 使用方式：
+ * <pre>
+ *   ApiClient client = new ApiClient("your-accessKey", "your-secretKey", "http://gateway-host:8090");
+ *   String result = client.get("/invoke/api_1", null);
+ * </pre>
+ *
+ * 自动处理：
+ * - 请求签名（SHA256）
+ * - 签名头注入（accessKey、nonce、timestamp、sign）
+ * - 响应解析
+ */
 public class ApiClient {
 
     private final String accessKey;

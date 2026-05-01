@@ -31,6 +31,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * API调用统计服务实现 —— 处理API调用次数记录和统计分析
+ *
+ * 调用统计流程：
+ * 1. 网关每次转发API请求后，通过Dubbo调用记录调用次数
+ * 2. 调用次数先写入Redis（高性能），再定时同步到MySQL（持久化）
+ * 3. 提供按API、按用户、按时间维度的统计查询
+ */
 @Service
 public class ApiInvokeServiceImpl implements ApiInvokeService {
 
