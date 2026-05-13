@@ -1,6 +1,7 @@
 package com.api.platform.controller;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.core.util.URLUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.api.platform.common.Result;
@@ -25,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
@@ -72,10 +74,6 @@ public class ApiInvokeController {
     @Autowired
     private RateLimiter rateLimiter;
 
-    private static final int RATE_LIMIT_CAPACITY = 2;
-
-    private static final int RATE_LIMIT_REFILL_RATE = 2;
-
     /**
      * 调用API
      *
@@ -115,9 +113,9 @@ public class ApiInvokeController {
         }
 
         String rateLimitKey = "invoke:" + user.getId() + ":" + apiInfo.getId();
-        
-        if (!rateLimiter.tryAcquire(rateLimitKey, RATE_LIMIT_CAPACITY, RATE_LIMIT_REFILL_RATE)) {
-            throw new BusinessException(429, "API调用频率超限(每秒最多2次)，请稍后再试");
+        int callLimit = apiInfo.getCallLimit() != null && apiInfo.getCallLimit() > 0 ? apiInfo.getCallLimit() : 0;
+        if (callLimit > 0 && !rateLimiter.tryAcquire(rateLimitKey, callLimit, callLimit)) {
+            throw new BusinessException(429, "API调用频率超限(每秒最多" + callLimit + "次)，请稍后再试");
         }
 
         userApiQuotaService.deductQuota(user.getId(), invokeDTO.getApiId());
@@ -128,14 +126,24 @@ public class ApiInvokeController {
         vo.setMethod(apiInfo.getMethod());
         vo.setRequestParams(invokeDTO.getParams());
 
+        long startTime = System.currentTimeMillis();
         try {
-            Object result = callTargetApi(apiInfo, invokeDTO.getAccessKey(), invokeDTO.getSecretKey(), invokeDTO.getParams());
+            InvokeResult invokeResult = callTargetApi(apiInfo, invokeDTO.getAccessKey(), invokeDTO.getParams());
             vo.setSuccess(true);
             vo.setMessage("API调用成功");
-            vo.setResult(result);
+            vo.setResult(invokeResult.data);
+            vo.setResponseTime(System.currentTimeMillis() - startTime);
+            vo.setStatusCode(invokeResult.statusCode);
+        } catch (BusinessException e) {
+            vo.setSuccess(false);
+            vo.setMessage("API调用失败: " + e.getMessage());
+            vo.setResponseTime(System.currentTimeMillis() - startTime);
+            vo.setStatusCode(e.getCode());
         } catch (Exception e) {
             vo.setSuccess(false);
             vo.setMessage("API调用失败: " + e.getMessage());
+            vo.setResponseTime(System.currentTimeMillis() - startTime);
+            vo.setStatusCode(500);
         }
 
         return Result.success(vo);
@@ -164,14 +172,13 @@ public class ApiInvokeController {
         return apiInfo;
     }
 
-    private Object callTargetApi(ApiInfo apiInfo, String accessKey, String secretKey, Map<String, Object> params) {
+    private InvokeResult callTargetApi(ApiInfo apiInfo, String accessKey, Map<String, Object> params) {
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Access-Key", accessKey);
-        headers.set("X-Secret-Key", secretKey);
 
         String targetUrl = apiInfo.getTargetUrl();
         String endpoint = apiInfo.getEndpoint();
-        
+
         String baseUrl;
         if (StrUtil.isNotBlank(targetUrl)) {
             if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
@@ -181,29 +188,62 @@ public class ApiInvokeController {
         } else {
             baseUrl = gatewayConfig.getGatewayUrl() + endpoint;
         }
-        
+
+        String method = apiInfo.getMethod();
+        if (StrUtil.isBlank(method)) {
+            method = "GET";
+        }
+
         try {
-            StringBuilder urlBuilder = new StringBuilder(baseUrl);
-            if (params != null && !params.isEmpty()) {
-                urlBuilder.append("?");
-                params.forEach((key, value) -> {
-                    urlBuilder.append(key).append("=").append(value).append("&");
-                });
-                baseUrl = urlBuilder.substring(0, urlBuilder.length() - 1);
+            HttpMethod httpMethod = HttpMethod.valueOf(method.toUpperCase());
+            HttpEntity<String> entity;
+            String requestUrl = baseUrl;
+
+            if (httpMethod == HttpMethod.GET) {
+                if (params != null && !params.isEmpty()) {
+                    StringBuilder urlBuilder = new StringBuilder(baseUrl).append("?");
+                    params.forEach((key, value) -> {
+                        if (value != null) {
+                            urlBuilder.append(URLUtil.encode(key))
+                                    .append("=")
+                                    .append(URLUtil.encode(String.valueOf(value)))
+                                    .append("&");
+                        }
+                    });
+                    requestUrl = urlBuilder.substring(0, urlBuilder.length() - 1);
+                }
+                entity = new HttpEntity<>(headers);
+            } else {
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                String body = (params != null && !params.isEmpty()) ? JSONUtil.toJsonStr(params) : "{}";
+                entity = new HttpEntity<>(body, headers);
             }
 
-            HttpEntity<String> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(baseUrl, HttpMethod.GET, entity, String.class);
+            ResponseEntity<String> response = restTemplate.exchange(requestUrl, httpMethod, entity, String.class);
 
+            Object data = null;
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 JSONObject result = JSONUtil.parseObj(response.getBody());
-                return result.get("data");
+                data = result.get("data");
             }
+            return new InvokeResult(data, response.getStatusCodeValue());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(400, "不支持的HTTP方法: " + method);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             throw new BusinessException(500, "调用API失败: " + e.getMessage());
         }
+    }
 
-        return null;
+    private static class InvokeResult {
+        final Object data;
+        final int statusCode;
+
+        InvokeResult(Object data, int statusCode) {
+            this.data = data;
+            this.statusCode = statusCode;
+        }
     }
 
     /**

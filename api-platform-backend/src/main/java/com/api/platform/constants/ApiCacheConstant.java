@@ -19,8 +19,11 @@ public class ApiCacheConstant {
     /** API空值缓存Key前缀（api:null:{apiId}，防缓存穿透） */
     public static final String API_NULL_KEY = "api:null:";
     
-    /** 限流缓存Key前缀 */
-    public static final String RATE_LIMIT_KEY = "rate_limit:";
+    /** 后端限流缓存Key前缀（biz_rate_limit:{action}:{userId}:{apiId}） */
+    public static final String BIZ_RATE_LIMIT_KEY = "biz_rate_limit:";
+
+    /** 网关限流缓存Key前缀（gateway_rate_limit:user:{userId}:api:{apiId}） */
+    public static final String GATEWAY_RATE_LIMIT_KEY = "gateway_rate_limit:";
     
     /** API列表缓存过期时间（秒），默认5分钟 */
     public static final long API_LIST_EXPIRE = 300;

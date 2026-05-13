@@ -60,8 +60,6 @@ public class TestController {
 
     private static final int MAX_RECORDS_PER_USER_API = 5;
     private static final int MAX_DAILY_CALLS_PER_USER_API = 5;
-    private static final int RATE_LIMIT_CAPACITY = 2;
-    private static final int RATE_LIMIT_REFILL_RATE = 2;
 
     @Autowired
     private AccessKeyService accessKeyService;
@@ -149,8 +147,10 @@ public class TestController {
         }
 
         String rateLimitKey = "test:" + userId + ":" + dto.getApiId();
-        if (!rateLimiter.tryAcquire(rateLimitKey, RATE_LIMIT_CAPACITY, RATE_LIMIT_REFILL_RATE)) {
-            throw new BusinessException(429, "测试调用频率超限(每秒最多2次)，请稍后再试");
+        int callLimit = (apiInfoForWhitelist != null && apiInfoForWhitelist.getCallLimit() != null && apiInfoForWhitelist.getCallLimit() > 0)
+                ? apiInfoForWhitelist.getCallLimit() : 0;
+        if (callLimit > 0 && !rateLimiter.tryAcquire(rateLimitKey, callLimit, callLimit)) {
+            throw new BusinessException(429, "测试调用频率超限(每秒最多" + callLimit + "次)，请稍后再试");
         }
 
         int todayCallCount = apiTestRecordService.countTodayCallsByUserIdAndApiId(userId, dto.getApiId());

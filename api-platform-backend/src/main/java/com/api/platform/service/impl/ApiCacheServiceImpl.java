@@ -113,19 +113,19 @@ public class ApiCacheServiceImpl implements ApiCacheService {
 
     @Override
     public void clearRateLimitCache(Long apiId) {
-        ApiVO apiVO = getApiDetailFromCache(apiId);
-        if (apiVO == null || apiVO.getEndpoint() == null) {
-            return;
-        }
-        String endpoint = apiVO.getEndpoint();
-        String pattern = RATE_LIMIT_KEY + "*:" + endpoint;
-        ScanOptions scanOptions = ScanOptions.scanOptions()
-                .match(pattern)
-                .count(1000)
-                .build();
-        try (Cursor<String> cursor = stringRedisTemplate.scan(scanOptions)) {
-            while (cursor.hasNext()) {
-                stringRedisTemplate.delete(cursor.next());
+        String[] patterns = {
+                BIZ_RATE_LIMIT_KEY + "*:" + apiId,
+                GATEWAY_RATE_LIMIT_KEY + "*:api:" + apiId
+        };
+        for (String pattern : patterns) {
+            ScanOptions scanOptions = ScanOptions.scanOptions()
+                    .match(pattern)
+                    .count(1000)
+                    .build();
+            try (Cursor<String> cursor = stringRedisTemplate.scan(scanOptions)) {
+                while (cursor.hasNext()) {
+                    stringRedisTemplate.delete(cursor.next());
+                }
             }
         }
     }

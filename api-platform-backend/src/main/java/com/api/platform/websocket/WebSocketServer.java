@@ -12,9 +12,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * WebSocket服务端
- * <p>核心职责：管理WebSocket连接的生命周期（连接/断开/消息/异常），
+ * 核心职责：管理WebSocket连接的生命周期（连接/断开/消息/异常），
  * 维护userId→Session的映射，支持向指定用户推送实时消息。
- * 同一用户只保留最新的连接（新连接会替换旧连接）。</p>
+ * 同一用户只保留最新的连接（新连接会替换旧连接）。
  */
 @ServerEndpoint(value = "/ws", configurator = WebSocketHandshakeInterceptor.class)
 @Component

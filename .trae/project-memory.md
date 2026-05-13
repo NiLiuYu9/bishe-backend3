@@ -33,7 +33,7 @@
 毕设项目/
 ├── api-platform-backend/          # 主后端服务（端口 8080，context-path: /api）
 │   └── src/main/java/com/api/platform/
-│       ├── annotation/            # 自定义注解（@RateLimit）
+│       ├── annotation/            # 自定义注解
 │       ├── common/                # 统一响应封装（Result, ResultCode）
 │       ├── config/                # 配置类（Redis, MybatisPlus, WebSocket, 支付宝等）
 │       ├── constants/             # 常量类
@@ -41,7 +41,7 @@
 │       ├── dto/                   # 数据传输对象
 │       ├── entity/                # 数据库实体（17个Entity）
 │       ├── exception/             # 异常处理（BusinessException, GlobalExceptionHandler）
-│       ├── interceptor/           # 拦截器（Session, RateLimit）
+│       ├── interceptor/           # 拦截器（Session）
 │       ├── mapper/                # MyBatis-Plus Mapper接口
 │       ├── ratelimit/             # 限流器实现
 │       ├── service/               # 服务层
@@ -208,7 +208,7 @@
 | 0 | AuthFilter | AK/SK 鉴权（nonce/时间戳/签名校验） |
 | 1 | InterfaceValidateFilter | 接口存在性/审核状态/配额校验 |
 | 2 | DynamicRouteFilter | 动态路由到目标URL |
-| 2 | RateLimitFilter | 令牌桶限流（Redis + Lua，固定capacity=2/refillRate=2，未识别用户返回401） |
+| 2 | RateLimitFilter | 令牌桶限流（Redis + Lua，按api_info.call_limit动态配置，call_limit=0不限流，Key维度：user:{userId}:api:{interfaceId}） |
 | 2 | ResponseLogFilter | 响应日志 & 调用次数更新 |
 
 ---
@@ -218,7 +218,7 @@
 | 功能 | 实现方式 | 关键文件 |
 |------|---------|---------|
 | AK/SK签名 | SHA256(body + "." + secretKey) | common/utils/SignUtils.java |
-| 限流 | @RateLimit注解 + 令牌桶(Redis+Lua) | annotation/RateLimit.java, ratelimit/RateLimiter.java |
+| 限流 | 令牌桶(Redis+Lua)，按api_info.call_limit动态配置 | ratelimit/RateLimiter.java |
 | 缓存 | Redis API详情缓存 + 空值缓存防穿透 | service/impl/ApiCacheServiceImpl.java |
 | 缓存预热 | ApplicationRunner启动时加载 | config/CacheWarmUpRunner.java |
 | 智能匹配 | Levenshtein编辑距离算法 | service/impl/MatchingServiceImpl.java |
@@ -408,3 +408,9 @@ npm run preview  # 预览生产构建
 | 2026-04-09 | 创建7天模拟测试数据SQL脚本insert_test_data.sql和delete_test_data.sql，覆盖14张表（order_info/api_invoke_daily/api_test_record/api_review/api_favorite/api_whitelist/user_api_quota/requirement/requirement_applicant/requirement_tag/requirement_after_sale/after_sale_message/notification_message/user_tag），ID范围9001+，测试用户user_id=1，时间范围2026-04-02~2026-04-08 | 数据库测试数据 |
 | 2026-04-10 | 重新生成7天模拟测试数据SQL脚本，基于实际mock API控制器重新创建api_info(60条)，修正endpoint/target_url/request_params/response_params，user_id=1拥有10个API，覆盖所有状态和功能场景，时间范围2026-04-03~2026-04-09 | 数据库api_info表+测试数据 |
 | 2026-04-19 | 修复限流逻辑：修复令牌桶refillRate=capacity致命Bug（限流形同虚设）；Lua脚本升级为毫秒级精度+正确时间推进；两层限流固定capacity=2/refillRate=2（每秒2次）；TestController新增限流；移除OrderController/ApiController的@RateLimit注解；网关未识别用户返回401；DefaultRedisScript改为类常量；Redis Key前缀隔离（biz_rate_limit:/gateway_rate_limit:） | api-platform-backend(ratelimit/controller) + api-platform-gateway(filter/ratelimit) |
+| 2026-05-01 | 删除限流死代码：移除@RateLimit注解、RateLimitInterceptor拦截器、WebMvcConfig中的拦截器注册、ApiController中无用import；限流参数改为动态读取api_info.call_limit字段（call_limit>0时按该值限流，=0时无限流），网关Key维度改为user:{userId}:api:{interfaceId} | api-platform-backend(annotation/interceptor/config/controller) + api-platform-gateway(filter) |
+| 2026-05-01 | 修复clearRateLimitCache缓存清理失效Bug：原实现用rate_limit:*:{endpoint}模式匹配，与实际Key结构（biz_rate_limit:invoke:{userId}:{apiId}/gateway_rate_limit:user:{userId}:api:{apiId}）完全不匹配；改为按apiId构建两个正确模式（biz_rate_limit:*:{apiId}和gateway_rate_limit:*:api:{apiId}）；ApiCacheConstant中RATE_LIMIT_KEY拆分为BIZ_RATE_LIMIT_KEY和GATEWAY_RATE_LIMIT_KEY | api-platform-backend(constants/service/impl) |
+| 2026-05-09 | 为application.yml每行添加中文注释，覆盖服务器/网关/日志/Spring/Druid/Redis/Session/Jackson/Dubbo/MyBatis-Plus/支付宝7大配置模块 | api-platform-backend/resources/application.yml |
+| 2026-05-09 | 修复ApiInvokeController.callTargetApi硬编码GET方法Bug：根据apiInfo.getMethod()动态选择HTTP方法；GET请求参数放URL查询参数，POST/PUT/DELETE请求参数以JSON放入请求体；移除secretKey明文传输（仅保留X-Access-Key）；补充responseTime和statusCode返回值；新增InvokeResult内部类封装调用结果 | api-platform-backend/controller/ApiInvokeController.java |
+| 2026-05-12 | 为前端全部源码文件添加超详细中文注释（面向后端开发者），每个概念都附带【后端类比】说明。覆盖：入口文件(main.ts)、根组件(App.vue)、路由配置(router)、全局配置(config)、工具函数(utils/4文件)、状态管理(stores/3文件)、类型定义(types/7文件)、API请求模块(api/13文件)、布局组件(layouts/3文件)、公共组件(components/13文件)、页面视图(views/25文件)、全局样式(style.css)、类型声明(vite-env.d.ts)，共计约80个文件 | api-platform-frontend/src 全部源码 |
+| 2026-05-13 | 修复支付完成后订单状态未变更、调用配额未增加Bug：根因是支付宝异步回调notifyUrl使用natappfree免费内网穿透（极不稳定），回调无法到达后端；前端轮询在浏览器后台标签页被限流，且用户从支付宝返回时visibilitychange只刷新列表不主动同步支付状态。修复：orders.vue新增checkAndSyncPendingOrders方法，在页面加载和visibilitychange时主动查询所有pending订单的支付状态（调用后端queryPayStatus兜底接口，该接口会查询支付宝交易状态并同步更新订单+增加配额）；startPaymentPolling启动时立即执行一次轮询而非等3秒 | api-platform-frontend/src/views/user/orders.vue |

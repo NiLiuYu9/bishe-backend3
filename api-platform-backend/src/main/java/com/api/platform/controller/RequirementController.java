@@ -17,6 +17,13 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpSession;
 
+/**
+ * 需求管理控制器
+ *
+ * 路由前缀：/requirement
+ * 核心功能：需求发布/更新/删除、开发者申请接单/撤回申请、需求方选择开发者、开发者交付、需求方确认交付/确认完成/取消需求
+ * 状态流转：open → in_progress → delivered → completed / cancelled
+ */
 @RestController
 @RequestMapping("/requirement")
 public class RequirementController {
@@ -24,6 +31,13 @@ public class RequirementController {
     @Autowired
     private RequirementService requirementService;
 
+    /**
+     * 分页查询需求列表（公开接口，未登录用户也可访问）
+     *
+     * @param queryDTO 查询条件（关键词、状态、排序、分页参数）
+     * @param session  HttpSession，用于获取当前登录用户ID（未登录时为null，不影响查询）
+     * @return Result&lt;PageResultVO&lt;RequirementVO&gt;&gt; 分页的需求列表
+     */
     @GetMapping("/list")
     public Result<PageResultVO<RequirementVO>> getList(RequirementQueryDTO queryDTO, HttpSession session) {
         Long currentUserId = SessionUtils.getCurrentUserIdOrNull(session);
@@ -95,6 +109,16 @@ public class RequirementController {
         return Result.success();
     }
 
+    /**
+     * 申请接单（开发者申请接需求）
+     *
+     * 开发者对 open 状态的需求提交申请，同一需求不可重复申请
+     *
+     * @param id       需求ID
+     * @param applyDTO 申请表单（申请说明）
+     * @param session  HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 申请成功无返回数据
+     */
     @PostMapping("/apply/{id}")
     public Result<Void> apply(@PathVariable Long id, @Validated @RequestBody RequirementApplyDTO applyDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -102,6 +126,15 @@ public class RequirementController {
         return Result.success();
     }
 
+    /**
+     * 撤回申请（开发者撤回自己的申请）
+     *
+     * 仅申请人本人可撤回，且需求状态必须为 open
+     *
+     * @param id      需求ID
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 撤回成功无返回数据
+     */
     @PostMapping("/withdraw-apply/{id}")
     public Result<Void> withdrawApply(@PathVariable Long id, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -109,6 +142,16 @@ public class RequirementController {
         return Result.success();
     }
 
+    /**
+     * 选择开发者（需求发布者从申请人中选择开发者接单）
+     *
+     * 选择后需求状态从 open 变为 in_progress
+     *
+     * @param id        需求ID
+     * @param selectDTO 选择表单（被选中的申请人ID）
+     * @param session   HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 选择成功无返回数据
+     */
     @PostMapping("/select-applicant/{id}")
     public Result<Void> selectApplicant(@PathVariable Long id, @Validated @RequestBody RequirementApplicantSelectDTO selectDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -132,6 +175,15 @@ public class RequirementController {
         return Result.success();
     }
 
+    /**
+     * 取消需求
+     *
+     * 仅需求发布者可取消，需求状态从当前状态变为 cancelled
+     *
+     * @param id      需求ID
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 取消成功无返回数据
+     */
     @PostMapping("/cancel/{id}")
     public Result<Void> cancel(@PathVariable Long id, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -139,6 +191,16 @@ public class RequirementController {
         return Result.success();
     }
 
+    /**
+     * 交付需求（开发者提交交付物）
+     *
+     * 仅被选中的开发者可交付，需求状态从 in_progress 变为 delivered
+     *
+     * @param id         需求ID
+     * @param deliverDTO 交付表单（交付地址 deliveryUrl）
+     * @param session    HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 交付成功无返回数据
+     */
     @PostMapping("/deliver/{id}")
     public Result<Void> deliver(@PathVariable Long id, @Validated @RequestBody RequirementDeliverDTO deliverDTO, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);
@@ -146,6 +208,15 @@ public class RequirementController {
         return Result.success();
     }
 
+    /**
+     * 确认交付（需求发布者确认开发者交付）
+     *
+     * 确认后需求状态从 delivered 变为 completed
+     *
+     * @param id      需求ID
+     * @param session HttpSession，用于获取当前登录用户ID
+     * @return Result&lt;Void&gt; 确认成功无返回数据
+     */
     @PostMapping("/confirm-delivery/{id}")
     public Result<Void> confirmDelivery(@PathVariable Long id, HttpSession session) {
         Long userId = SessionUtils.getCurrentUserId(session);

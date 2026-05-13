@@ -1,83 +1,90 @@
+# ==================== 服务器配置 ====================
 server:
-  port: 8080
+  port: 8080                          # 服务端口号
   servlet:
-    context-path: /api
+    context-path: /api                # 应用上下文路径，所有接口需以 /api 开头
 
+# ==================== 自定义API网关配置 ====================
 api:
   gateway:
-    url: http://localhost:9000
-    mock-path: /mock
+    url: http://localhost:9000         # 网关服务地址
+    mock-path: /mock                  # Mock接口路径前缀（已废弃，Mock接口改为按业务分类）
 
+# ==================== 日志配置 ====================
 logging:
   level:
-    com.alibaba.druid.pool.DruidAbstractDataSource: ERROR
+    com.alibaba.druid.pool.DruidAbstractDataSource: ERROR   # 关闭Druid数据源DEBUG日志，仅打印ERROR级别
 
+# ==================== Spring Boot 核心配置 ====================
 spring:
   application:
-    name: api-platform-backend
+    name: api-platform-backend        # 应用名称，用于Nacos服务注册和Dubbo服务标识
   cloud:
     nacos:
       discovery:
-        server-addr: localhost:8848
+        server-addr: localhost:8848   # Nacos注册中心地址，服务注册与发现
   datasource:
-    type: com.alibaba.druid.pool.DruidDataSource
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/api_platform?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
-    username: root
-    password: 123456
+    type: com.alibaba.druid.pool.DruidDataSource   # 使用Druid连接池
+    driver-class-name: com.mysql.cj.jdbc.Driver    # MySQL JDBC驱动
+    url: jdbc:mysql://localhost:3306/api_platform?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai   # 数据库连接地址（api_platform库，UTF-8编码，禁用SSL，上海时区）
+    username: root                    # 数据库用户名
+    password: 123456                  # 数据库密码
     druid:
-      initial-size: 5
-      min-idle: 5
-      max-active: 20
-      max-wait: 60000
-      time-between-eviction-runs-millis: 60000
-      min-evictable-idle-time-millis: 300000
-      validation-query: SELECT 1
-      test-while-idle: true
-      test-on-borrow: false
-      test-on-return: false
-      pool-prepared-statements: true
-      max-pool-prepared-statement-per-connection-size: 20
+      initial-size: 5                 # 连接池初始化连接数
+      min-idle: 5                     # 连接池最小空闲连接数
+      max-active: 20                  # 连接池最大活跃连接数
+      max-wait: 60000                 # 获取连接最大等待时间（毫秒）
+      time-between-eviction-runs-millis: 60000    # 空闲连接检测线程运行间隔（毫秒）
+      min-evictable-idle-time-millis: 300000      # 连接最小空闲时间，超过此值可能被回收（毫秒）
+      validation-query: SELECT 1      # 连接有效性验证SQL
+      test-while-idle: true           # 空闲时检测连接是否有效
+      test-on-borrow: false           # 获取连接时不检测有效性（提升性能）
+      test-on-return: false           # 归还连接时不检测有效性（提升性能）
+      pool-prepared-statements: true  # 开启预编译SQL语句缓存（PSCache）
+      max-pool-prepared-statement-per-connection-size: 20    # 每个连接PSCache最大缓存数量
   redis:
-    host: localhost
-    port: 6379
+    host: localhost                   # Redis服务器地址
+    port: 6379                        # Redis服务器端口
   session:
-    store-type: redis
-    timeout: 1800
+    store-type: redis                 # Session存储方式：使用Redis集中存储，支持分布式会话
+    timeout: 1800000                     # Session超时时间（秒）
   jackson:
-    date-format: yyyy-MM-dd HH:mm:ss
-    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss  # JSON序列化时日期格式化模板
+    time-zone: Asia/Shanghai          # JSON序列化时使用的时区
     serialization:
-      write-dates-as-timestamps: false
+      write-dates-as-timestamps: false   # 日期不序列化为时间戳，使用上面指定的格式化字符串
 
+# ==================== Dubbo RPC 配置 ====================
 dubbo:
   application:
-    name: api-platform-backend
+    name: api-platform-backend        # Dubbo服务应用名，与spring.application.name保持一致
   protocol:
-    name: dubbo
-    port: 20880
+    name: dubbo                       # Dubbo通信协议
+    port: 20880                       # Dubbo协议端口
   registry:
-    address: nacos://localhost:8848
+    address: nacos://localhost:8848   # Dubbo注册中心：使用Nacos作为注册中心
   scan:
-    base-packages: com.api.platform.service.dubbo
+    base-packages: com.api.platform.service.dubbo   # Dubbo服务扫描包路径，该包下的@Service会被暴露为Dubbo服务
 
+# ==================== MyBatis-Plus ORM 配置 ====================
 mybatis-plus:
-  mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.api.platform.entity
+  mapper-locations: classpath:mapper/*.xml    # Mapper XML文件路径，用于自定义复杂SQL
+  type-aliases-package: com.api.platform.entity   # 实体类别名包，XML中可直接使用类名
   configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true             # 自动下划线转驼峰（如user_name → userName）
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl   # SQL日志输出到控制台，便于调试
   global-config:
     db-config:
-      id-type: auto
-      logic-delete-field: deleted
-      logic-delete-value: 1
-      logic-not-delete-value: 0
+      id-type: auto                                # 主键ID生成策略：数据库自增
+      logic-delete-field: deleted                  # 逻辑删除字段名
+      logic-delete-value: 1                        # 逻辑已删除值（deleted=1表示已删除）
+      logic-not-delete-value: 0                    # 逻辑未删除值（deleted=0表示未删除）
 
+# ==================== 支付宝支付配置（沙箱环境） ====================
 alipay:
-  app-id: 9021000162629658
-  private-key: MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCZuPzyXMGCx97tMj9iUdiUwVAyVNDu7fVSqhmF78Ux1/zIMzC0SYVv42sWMEE1+ACKHRsca5qpO+QIuEYQDkb3KtjMc4oIkRDDzFyqn4J4mmrL7lxZNf0eLUu0RFWWtOek+GgdiuO9P7behfIn3ijdR7rkX6d++vlAdv8GL/wYc0AJseAYusF9gq0ZLUca5G5S7hH4gb3OPZQprtUMjcMDNn8z6m0++9AeGr4TH06LHAZXQzBCNdJ841guSQ+sxJoAp78cTuirzaDN5m+rhHOIukeSj3scW19QzFTgyDHV6xLcHEGTmQCW7/Dcp3qWTEdeClJnjFIe2sGznIRkIOx5AgMBAAECggEAJLon5Rf4O/DY+D7rGeiIIHJXYM8W5B8CX++4DWIN8SyzfnmMh2aRdPwW18RLsENCjb0Kfy3OU+S1RMgSJT/kAKXCCocIUaenI8Ct2y4lE/+AyJx4f/AAO7eCwN0avdkXBzk6VuSaKNsSK/RAuPnBNa0vn+Sithnsd1R29dl9F7IBmSI9DBFMsMgcbA92mY7n+duSNJhqN1DeRGa6RBmQkI02g4Py3UDj4YiDlrfEqVthR4L/PPUKXGa0tA9QKOUnJoPdUzGv24avjK6BgRlT87fiqekQfFpF1wNBvyapuKYNchF8Pdr+c3yr/2E69XKenlbroFod9QESXhkpaYKGaQKBgQDmrpcX+WOHD0ErqC5CJYKFfdJdLU5WEXIBrSUCMrKlH9786CPLcKs/liISK0GJzU5fCTQxQPnMYp15FZ6fXoo5ydpmRCksuCtPYCgtrat/Roo22PjgtN9gi5YY4MQpBzW5y9OmDblqhcyrE8KFhoSOE8cHoGRxVMMaYf5r4LNEWwKBgQCqmBc/Thg0emgi1y6mo1lROklBO6RupDAYd0pPtvgLYOjOPmT8n7kE5lWEpZiWdDrj6gcrNuvsLnaj5hSLDManTpcig5ql/anrWloQsCQk/t0A96fDe8+Jr+graj93gS7Sq0Lpryblx3LeyEDFNkYSR+qD2XisD3Z1RTMc4lJauwKBgQChp1uOm19ZuCDtXQ/9npeWwJN4ZFVvDw6biiBTJ//0ox76kBr1Z+E50BXUMafdz5fKFYMTuPrUdY7w2WutNu0ajg+UdtN72RvQpgvB5uA1ctNMmEPgBCA9YdQvXuNX9Qt7RhDtXtS+h0Dj6hb4x0mA3u8sswNwP/vxMxa9tlsp3QKBgEpwRSydchhsFUamqLeT7aRxD4gEc3LH+Cik3Os9xqyIY+2i8kP9milWLJjN/XAhVZUgCHLF61pKyAAqpGosb/6PX4ly7adisaN98HD5uzvdbig+6Jh3TQ8ij+dp3DnUR88rZe48PHfleO1XalPjo93UPbO80FgcAy+Wu3/uDcuDAoGBAIuf21xqQ+rNQLoOdw5nJkZ3QOV3fN9crcypzr4AFYg4kSKGkCjh3wdc0VLjXBouv1WjJaBUGxuieyq7+tj/1r7hnbZ0NMVbDC8XQI94uurRUgyA+17zeuDcrTochh2cNelS7OchoKx5ItVSbHmGP1v5ZE07Lyi7O0FZJFZyoc1I
-  alipay-public-key: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7SIjOYEEkIP33koTaurZSzF9Q80x8XNxXgJEaYUnsUbaf9oDLdNva7+knJtVwxzMA9FjMcq9I/azuLL9ImyQPZphzdDhnKy2R5DYvzXPi8IMA1q9H3r/Ebj2bJ49jIty2iCZU5pBG4zONttCktwb8LqP099NrxNSgVZwdOpKMhkaCJ7aj/7OYIxq3mLb24GeDkv42VnztaoI8V3X7MC60jSlRPcNQUjiFTggq0qN8GC1kEkAHIqrIcth2CK6/cOly8fMQAXqTdHjw1XB73I4n5cwAPcFl/GbxtDUk7ZKV4OP0LCBHRCceS4zclGFKJENnAHY4ZND27JL2qgmSL+3KQIDAQAB
-  server-url: https://openapi-sandbox.dl.alipaydev.com/gateway.do
-  notify-url: http://t4d9d59d.natappfree.cc/api/order/pay/notify
-  return-url: http://localhost:3000/user/orders
+  app-id: 9021000162629658                        # 支付宝沙箱应用ID
+  private-key: MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCZuPzyXMGCx97tMj9iUdiUwVAyVNDu7fVSqhmF78Ux1/zIMzC0SYVv42sWMEE1+ACKHRsca5qpO+QIuEYQDkb3KtjMc4oIkRDDzFyqn4J4mmrL7lxZNf0eLUu0RFWWtOek+GgdiuO9P7behfIn3ijdR7rkX6d++vlAdv8GL/wYc0AJseAYusF9gq0ZLUca5G5S7hH4gb3OPZQprtUMjcMDNn8z6m0++9AeGr4TH06LHAZXQzBCNdJ841guSQ+sxJoAp78cTuirzaDN5m+rhHOIukeSj3scW19QzFTgyDHV6xLcHEGTmQCW7/Dcp3qWTEdeClJnjFIe2sGznIRkIOx5AgMBAAECggEAJLon5Rf4O/DY+D7rGeiIIHJXYM8W5B8CX++4DWIN8SyzfnmMh2aRdPwW18RLsENCjb0Kfy3OU+S1RMgSJT/kAKXCCocIUaenI8Ct2y4lE/+AyJx4f/AAO7eCwN0avdkXBzk6VuSaKNsSK/RAuPnBNa0vn+Sithnsd1R29dl9F7IBmSI9DBFMsMgcbA92mY7n+duSNJhqN1DeRGa6RBmQkI02g4Py3UDj4YiDlrfEqVthR4L/PPUKXGa0tA9QKOUnJoPdUzGv24avjK6BgRlT87fiqekQfFpF1wNBvyapuKYNchF8Pdr+c3yr/2E69XKenlbroFod9QESXhkpaYKGaQKBgQDmrpcX+WOHD0ErqC5CJYKFfdJdLU5WEXIBrSUCMrKlH9786CPLcKs/liISK0GJzU5fCTQxQPnMYp15FZ6fXoo5ydpmRCksuCtPYCgtrat/Roo22PjgtN9gi5YY4MQpBzW5y9OmDblqhcyrE8KFhoSOE8cHoGRxVMMaYf5r4LNEWwKBgQCqmBc/Thg0emgi1y6mo1lROklBO6RupDAYd0pPtvgLYOjOPmT8n7kE5lWEpZiWdDrj6gcrNuvsLnaj5hSLDManTpcig5ql/anrWloQsCQk/t0A96fDe8+Jr+graj93gS7Sq0Lpryblx3LeyEDFNkYSR+qD2XisD3Z1RTMc4lJauwKBgQChp1uOm19ZuCDtXQ/9npeWwJN4ZFVvDw6biiBTJ//0ox76kBr1Z+E50BXUMafdz5fKFYMTuPrUdY7w2WutNu0ajg+UdtN72RvQpgvB5uA1ctNMmEPgBCA9YdQvXuNX9Qt7RhDtXtS+h0Dj6hb4x0mA3u8sswNwP/vxMxa9tlsp3QKBgEpwRSydchhsFUamqLeT7aRxD4gEc3LH+Cik3Os9xqyIY+2i8kP9milWLJjN/XAhVZUgCHLF61pKyAAqpGosb/6PX4ly7adisaN98HD5uzvdbig+6Jh3TQ8ij+dp3DnUR88rZe48PHfleO1XalPjo93UPbO80FgcAy+Wu3/uDcuDAoGBAIuf21xqQ+rNQLoOdw5nJkZ3QOV3fN9crcypzr4AFYg4kSKGkCjh3wdc0VLjXBouv1WjJaBUGxuieyq7+tj/1r7hnbZ0NMVbDC8XQI94uurRUgyA+17zeuDcrTochh2cNelS7OchoKx5ItVSbHmGP1v5ZE07Lyi7O0FZJFZyoc1I   # 支付宝应用私钥（用于请求签名）
+  alipay-public-key: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7SIjOYEEkIP33koTaurZSzF9Q80x8XNxXgJEaYUnsUbaf9oDLdNva7+knJtVwxzMA9FjMcq9I/azuLL9ImyQPZphzdDhnKy2R5DYvzXPi8IMA1q9H3r/Ebj2bJ49jIty2iCZU5pBG4zONttCktwb8LqP099NrxNSgVZwdOpKMhkaCJ7aj/7OYIxq3mLb24GeDkv42VnztaoI8V3X7MC60jSlRPcNQUjiFTggq0qN8GC1kEkAHIqrIcth2CK6/cOly8fMQAXqTdHjw1XB73I4n5cwAPcFl/GbxtDUk7ZKV4OP0LCBHRCceS4zclGFKJENnAHY4ZND27JL2qgmSL+3KQIDAQAB   # 支付宝公钥（用于验证支付宝异步通知签名）
+  server-url: https://openapi-sandbox.dl.alipaydev.com/gateway.do   # 支付宝沙箱网关地址
+  notify-url: http://ja2267d9.natappfree.cc/api/order/pay/notify    # 支付异步通知回调地址（内网穿透）
+  return-url: http://localhost:3000/user/orders                      # 支付完成后同步跳转地址（前端订单页）

@@ -23,20 +23,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Rate limit filter - 4th ring in gateway filter chain (Order=2)
- *
- * Responsibility: Token bucket rate limiting based on Redis + Lua script to prevent malicious high-frequency API calls
- * Rate limit rule: Fixed capacity=2, refillRate=2 (max 2 requests per second per user per path)
- * Returns 429 Too Many Requests when rate limit exceeded
- * Returns 401 Unauthorized when user identity cannot be resolved
- */
 @Slf4j
 @Component
 public class RateLimitFilter implements GlobalFilter, Ordered {
 
-    private static final int RATE_LIMIT_CAPACITY = 2;
-    private static final int RATE_LIMIT_REFILL_RATE = 2;
+    private static final int DEFAULT_CALL_LIMIT = 10;
 
     @Autowired
     private RateLimiter rateLimiter;
@@ -53,35 +44,32 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
-        Long userId = resolveUserId(request);
+        Long userId = exchange.getAttribute("userId");
         if (userId == null) {
             return handleUnauthorized(exchange);
         }
 
-        String rateLimitKey = buildRateLimitKey(userId, path);
+        Integer callLimit = exchange.getAttribute("callLimit");
+        if (callLimit == null || callLimit <= 0) {
+            return chain.filter(exchange);
+        }
 
-        boolean allowed = rateLimiter.tryAcquire(rateLimitKey, RATE_LIMIT_CAPACITY, RATE_LIMIT_REFILL_RATE);
+        Long interfaceId = exchange.getAttribute("interfaceId");
+        String rateLimitKey = buildRateLimitKey(userId, interfaceId, path);
+
+        boolean allowed = rateLimiter.tryAcquire(rateLimitKey, callLimit, callLimit);
 
         if (!allowed) {
-            return handleRateLimitExceeded(exchange);
+            return handleRateLimitExceeded(exchange, callLimit);
         }
 
         return chain.filter(exchange);
     }
 
-    private Long resolveUserId(ServerHttpRequest request) {
-        String userIdHeader = request.getHeaders().getFirst(AuthConstants.USER_ID_HEADER);
-        if (StrUtil.isNotBlank(userIdHeader)) {
-            try {
-                return Long.parseLong(userIdHeader);
-            } catch (NumberFormatException e) {
-                log.warn("Invalid userId header: {}", userIdHeader);
-            }
+    private String buildRateLimitKey(Long userId, Long interfaceId, String path) {
+        if (interfaceId != null) {
+            return "user:" + userId + ":api:" + interfaceId;
         }
-        return null;
-    }
-
-    private String buildRateLimitKey(Long userId, String path) {
         return "user:" + userId + ":" + path;
     }
 
@@ -113,21 +101,21 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
         return response.writeWith(Mono.just(buffer));
     }
 
-    private Mono<Void> handleRateLimitExceeded(ServerWebExchange exchange) {
+    private Mono<Void> handleRateLimitExceeded(ServerWebExchange exchange, int callLimit) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
         Map<String, Object> result = new HashMap<>();
         result.put("code", 429);
-        result.put("message", "API调用频率超限(每秒最多2次)，请稍后再试");
+        result.put("message", "API调用频率超限(每秒最多" + callLimit + "次)，请稍后再试");
         result.put("data", null);
 
         String json;
         try {
             json = objectMapper.writeValueAsString(result);
         } catch (JsonProcessingException e) {
-            json = "{\"code\":429,\"message\":\"API调用频率超限(每秒最多2次)，请稍后再试\",\"data\":null}";
+            json = "{\"code\":429,\"message\":\"API调用频率超限，请稍后再试\",\"data\":null}";
         }
 
         DataBuffer buffer = response.bufferFactory().wrap(json.getBytes(StandardCharsets.UTF_8));
